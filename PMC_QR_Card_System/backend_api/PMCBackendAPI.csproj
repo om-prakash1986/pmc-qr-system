@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
+          Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+
+  <!-- ══════════════════════════════════════════════════════════
+       PMC Smart QR Card System — Backend API Project
+       ASP.NET Web Application (.NET Framework 4.7.2)
+       Open PMC_QR_Card_System.sln in Visual Studio 2019/2022
+       ══════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform       Condition=" '$(Platform)'       == '' ">AnyCPU</Platform>
+    <ProductVersion></ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{8F4A7B2D-C1E3-4F5A-B890-D3E7F6A12C45}</ProjectGuid>
+    <!-- Web Application Project type GUIDs -->
+    <ProjectTypeGuids>{349C5851-65DF-11DA-9384-00065B846F21};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>PMCBackendAPI</RootNamespace>
+    <AssemblyName>PMCBackendAPI</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <UseIISExpress>true</UseIISExpress>
+    <IISExpressSSLPort>44300</IISExpressSSLPort>
+    <IISExpressAnonymousAuthentication />
+    <IISExpressWindowsAuthentication />
+    <IISExpressUseClassicPipelineMode />
+    <Use64BitIISExpress />
+    <NuGetPackageImportStamp></NuGetPackageImportStamp>
+    <MvcBuildViews>false</MvcBuildViews>
+  </PropertyGroup>
+
+  <!-- Debug configuration -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <!-- Release configuration -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <!-- ══ REFERENCES ═══════════════════════════════════════════ -->
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.ApplicationServices" />
+    <Reference Include="System.Web.DynamicData" />
+    <Reference Include="System.Web.Entity" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Web.Services" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <!-- ══ PROPERTIES ══════════════════════════════════════════ -->
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+
+  <!-- ══ HANDLER FILES (.ashx + .ashx.cs code-behinds) ═══════ -->
+  <ItemGroup>
+
+    <!-- Admin Dashboard Handler -->
+    <Content Include="AdminDashboardHandler.ashx">
+      <DependentUpon>AdminDashboardHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="AdminDashboardHandler.ashx.cs" />
+
+    <!-- Login Handler -->
+    <Content Include="LoginHandler.ashx">
+      <DependentUpon>LoginHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="LoginHandler.ashx.cs" />
+
+    <!-- Activate Card Handler -->
+    <Content Include="ActivateCardHandler.ashx">
+      <DependentUpon>ActivateCardHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="ActivateCardHandler.ashx.cs" />
+
+    <!-- Card Lookup Handler -->
+    <Content Include="CardLookupHandler.ashx">
+      <DependentUpon>CardLookupHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="CardLookupHandler.ashx.cs" />
+
+    <!-- Property Lookup Handler -->
+    <Content Include="PropertyLookupHandler.ashx">
+      <DependentUpon>PropertyLookupHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="PropertyLookupHandler.ashx.cs" />
+
+    <!-- Citizen Portal Handler -->
+    <Content Include="CitizenPortal.ashx">
+      <DependentUpon>CitizenPortal.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="CitizenPortal.ashx.cs" Condition="Exists('CitizenPortal.ashx.cs')" />
+
+    <!-- Tax Collector Property Details Handler -->
+    <Content Include="TaxCollectorPropertyDetailsHandler.ashx">
+      <DependentUpon>TaxCollectorPropertyDetailsHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="TaxCollectorPropertyDetailsHandler.ashx.cs" />
+
+    <!-- Process Payment Handler -->
+    <Content Include="ProcessPaymentHandler.ashx">
+      <DependentUpon>ProcessPaymentHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="ProcessPaymentHandler.ashx.cs" />
+
+  </ItemGroup>
+
+  <!-- ══ WEB CONFIG ═══════════════════════════════════════════ -->
+  <ItemGroup>
+    <Content Include="web.config" />
+  </ItemGroup>
+
+  <!-- ══ SQL SCRIPTS (content only, not compiled) ════════════ -->
+  <ItemGroup>
+    <None Include="..\database_scripts\01_create_schema.sql" />
+    <None Include="..\database_scripts\insert_taxcollector.sql" />
+  </ItemGroup>
+
+  <!-- ══ ADMIN DASHBOARD HTML ════════════════════════════════ -->
+  <ItemGroup>
+    <Content Include="admin_dashboard\index.html" />
+    <Content Include="admin_dashboard\citizen_portal.html" />
+  </ItemGroup>
+
+  <!-- ══ MSBuild TARGETS ══════════════════════════════════════ -->
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets"
+          Condition="'$(VSToolsPath)' != '' And Exists('$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets')" />
+
+  <!-- IIS Express settings -->
+  <ProjectExtensions>
+    <VisualStudio>
+      <FlavorProperties GUID="{349C5851-65DF-11DA-9384-00065B846F21}">
+        <WebProjectProperties>
+          <UseIIS>True</UseIIS>
+          <AutoAssignPort>True</AutoAssignPort>
+          <DevelopmentServerPort>55500</DevelopmentServerPort>
+          <DevelopmentServerVPath>/</DevelopmentServerVPath>
+          <IISUrl>http://localhost:55500/</IISUrl>
+          <NTLMAuthentication>False</NTLMAuthentication>
+          <UseCustomServer>False</UseCustomServer>
+          <CustomServerUrl>
+          </CustomServerUrl>
+          <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
+        </WebProjectProperties>
+      </FlavorProperties>
+    </VisualStudio>
+  </ProjectExtensions>
+
+</Project>

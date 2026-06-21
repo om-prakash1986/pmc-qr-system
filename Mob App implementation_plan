@@ -1,0 +1,108 @@
+# PMC PVC QR Card Activation App - Flutter Implementation Plan
+
+We will create a Flutter mobile application for **Patna Nagar Nigam (PMC)** municipal staff to activate PVC QR plates on-site in the field.
+
+The app will feature:
+1. **Secure Employee Authentication**: Secure login for field agents.
+2. **Dashboard**: Statistics, recent activations, sync status, and visual action buttons.
+3. **QR Scanner & Simulator**: Real camera-based scanning with a built-in interactive simulator for testing on platforms without camera support (e.g. desktop/web/simulators).
+4. **PID Verification Form**: Input and verify Property IDs (PIDs), pulling owner/address information to ensure accurate matching.
+5. **Security Logic (One-time Activation)**: Check status of QR codes (`UNASSIGNED` vs `ACTIVATED`), prevent reassignment, and handle supervisor bypass workflow.
+6. **Offline Queue Sync**: Save scans locally if internet is unavailable, allowing syncing later.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Mock Database State**: Since there is no backend API codebase in the workspace, the Flutter application will be built with a decoupled `MockApiService` and a local database (using `shared_preferences` for persistence) pre-populated with:
+> - Valid PIDs (e.g. `PTN-W15-H1001`, `PTN-W15-H1002`, etc.) and corresponding owner/address data.
+> - A list of QR Codes generated in Phase 1 (with matching tokens like `2D0F1150-CF04-45DF-A4B3-AF12F41209D7` from the database example).
+> - Mock employee credentials (e.g. User: `EMP101`, Password: `password`).
+>
+> This service layer will expose asynchronous API-like methods, making it extremely easy to replace with real HTTP requests (`http` or `dio`) when the backend is ready.
+
+> [!TIP]
+> **Cross-Platform Compatibility**: To ensure the project builds and runs smoothly on all platforms (Android, iOS, Windows, and Web), camera-based packages can sometimes have platform limitations. We will implement:
+> - A simulator mode that enables manual typing of QR URLs/Tokens or choosing from a dropdown list of pre-generated mock PVC cards.
+> - An optional real scanning view using `mobile_scanner` that is wrapped to prevent app crashes on unsupported platforms.
+
+---
+
+## Proposed Architecture & Directory Structure
+
+We will create a new Flutter application named `pmc_activation_app` inside the workspace directory.
+
+```
+pmc_activation_app/
+├── pubspec.yaml               # Package dependencies (provider, google_fonts, shared_preferences)
+└── lib/
+    ├── main.dart              # App entry point, material app, routing, providers
+    ├── theme.dart             # Curated PMC aesthetic (deep blue, rich orange, emerald green, card overlays)
+    ├── models/
+    │   ├── qr_card.dart       # Model representing PVC QR Card details
+    │   └── property.dart      # Model representing Property details
+    ├── services/
+    │   ├── mock_database.dart # Seed data for testing (PIDs, employees, QRs)
+    │   ├── api_service.dart   # Async API-like service (simulates network delays & database operations)
+    │   └── auth_service.dart  # Manages active employee session
+    ├── screens/
+    │   ├── login_screen.dart       # Premium glassmorphism login screen
+    │   ├── home_screen.dart        # Dashboard, stats, offline status, and scan launch
+    │   ├── scan_screen.dart        # Camera scanner interface + Interactive mock selector
+    │   ├── activation_screen.dart  # Verification form (scanned QR data + PID entry + confirmation)
+    │   └── success_screen.dart     # Confetti & visual celebration of successful link
+    └── widgets/
+        ├── custom_button.dart      # Reusable button with hover/tap animations
+        └── status_badge.dart       # Visual status tag (Unassigned / Activated)
+```
+
+---
+
+## Core Flow & Verification Rules
+
+```mermaid
+graph TD
+    A[Start App] --> B[Login Screen]
+    B -->|Authenticate| C[Dashboard]
+    C -->|Tap Scan| D[Scan Screen]
+    D -->|Scan QR / Choose Mock| E[Extract QRToken/URL]
+    E -->|Lookup QR Details| F{QR Status?}
+    F -->|ACTIVATED| G[Show Error: Already Activated]
+    F -->|UNASSIGNED| H[Enter PID]
+    H -->|Click Verify| I{PID Exists?}
+    I -->|No| J[Show Error: Invalid PID]
+    I -->|Yes| K[Show Property & Owner Details]
+    K -->|Confirm & Save| L[Update Status to ACTIVATED]
+    L --> M[Celebration & Success Screen]
+    M --> C
+```
+
+1. **Scan Validation**:
+   - The app parses the scanned string. It handles both full URLs (e.g. `https://pmc.bihar.gov.in/qr/2D0F1150-CF04-45DF-A4B3-AF12F41209D7`) and individual QRTokens/IDs.
+   - It matches the token against the `QRMaster` database.
+2. **One-Time Activation Security**:
+   - If the QR card status is `ACTIVATED`, the UI shows a locked screen indicating the Property ID it is already linked to, the employee who linked it, and the date.
+   - If the status is `UNASSIGNED`, the user is allowed to proceed.
+3. **PID Validation**:
+   - The user enters a PID. The app checks if this PID exists in the database.
+   - If valid, it fetches details (Owner, Address, Ward). The staff verifies this visually.
+   - Once confirmed, it updates the database, setting the state to `ACTIVATED` and recording `ActivatedBy = EMP101` and `ActivatedDate = DateTime.now()`.
+
+---
+
+## Verification Plan
+
+### Automated & Manual Testing
+We will verify the implementation by compiling and running the project:
+1. **Create and Setup**: Create the Flutter project and configure `pubspec.yaml` with required dependencies.
+2. **Build Test**: Run `flutter build windows` or `flutter build web` or `flutter run` to confirm compile-time correctness.
+3. **Interactive Testing (Simulator Mode)**:
+   - Open the app.
+   - Log in using credentials `EMP101` and `password`.
+   - On the Home screen, review statistics (e.g., active cards, pending syncs).
+   - Go to "Scan" -> Use the **Interactive Simulator Mode** to select an unassigned QR card (e.g. `PMC/IND/DQR/00000001` with token `2D0F1150-CF04-45DF-A4B3-AF12F41209D7`).
+   - Enter an invalid PID to test verification failure.
+   - Enter a valid PID (e.g. `PTN-W15-H1001`) -> Verify that property owner info is loaded.
+   - Click "Confirm & Activate" -> Verify the success screen is shown and statistics update.
+   - Try to scan the same QR card again -> Verify the security logic stops the user, showing it's already assigned.
