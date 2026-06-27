@@ -27,8 +27,8 @@ public class PropertyOutstandingHandler : IHttpHandler
             string connStr = System.Configuration.ConfigurationManager.ConnectionStrings["PTax"].ConnectionString;
             using (SqlConnection conn = new SqlConnection(connStr))
             {
-                // First, get the QR record to fetch linked propertyId
-                string qrQuery = @"SELECT property_id FROM tbl_qr_card WHERE qr_token = @Token AND status = 'ACTIVATED'";
+                // First, get the QR record to fetch linked PropertyId from QRMaster
+                string qrQuery = @"SELECT PropertyId FROM QRMaster WHERE (QRToken = @Token OR QRId = @Token OR QRUrl = @Token) AND Status = 'ACTIVATED'";
                 using (SqlCommand qrCmd = new SqlCommand(qrQuery, conn))
                 {
                     qrCmd.Parameters.AddWithValue("@Token", token);
@@ -58,83 +58,89 @@ public class PropertyOutstandingHandler : IHttpHandler
                         LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id 
                         LEFT JOIN tbl_street_type_master stm ON pd.street_type_id = stm.id 
                         WHERE pd.PID = @PID AND pd.status IN (1,2,3,4)";
+                    var details = new Dictionary<string, object>();
+                    long propertyPk = 0;
+
                     using (SqlCommand propCmd = new SqlCommand(propQuery, conn))
                     {
                         propCmd.Parameters.AddWithValue("@PID", propertyId);
                         using (SqlDataReader sdr = propCmd.ExecuteReader())
                         {
-                            if (!sdr.Read())
+                            if (sdr.Read())
                             {
-                                SendResponse(context, 404, false, "Property ID not found", null);
-                                return;
+                                propertyPk = sdr["property_pk"] != DBNull.Value ? Convert.ToInt64(sdr["property_pk"]) : 0;
+                                details["pid"] = sdr["PID"].ToString();
+                                details["ownerName"] = sdr["Owner_Name"].ToString();
+                                details["guardianName"] = sdr["Guardian_Name"] == DBNull.Value ? "" : sdr["Guardian_Name"].ToString();
+                                details["mobileNo"] = sdr["Mobile_No"] == DBNull.Value ? "" : sdr["Mobile_No"].ToString();
+                                details["address"] = sdr["Address"] == DBNull.Value ? "" : sdr["Address"].ToString();
+                                details["applicationNo"] = sdr["application_no"] == DBNull.Value ? "" : sdr["application_no"].ToString();
+                                details["plotArea"] = sdr["plot_area"] == DBNull.Value ? "" : sdr["plot_area"].ToString();
+                                details["constructedArea"] = sdr["constructed_area"] == DBNull.Value ? "" : sdr["constructed_area"].ToString();
+                                details["streetType"] = sdr["street_type"] == DBNull.Value ? "" : sdr["street_type"].ToString();
                             }
+                        }
+                    }
 
-                            var details = new Dictionary<string, object>();
-                            long propertyPk = sdr["property_pk"] != DBNull.Value ? Convert.ToInt64(sdr["property_pk"]) : 0;
-                            details["pid"] = sdr["PID"].ToString();
-                            details["ownerName"] = sdr["Owner_Name"].ToString();
-                            details["guardianName"] = sdr["Guardian_Name"] == DBNull.Value ? "" : sdr["Guardian_Name"].ToString();
-                            details["mobileNo"] = sdr["Mobile_No"] == DBNull.Value ? "" : sdr["Mobile_No"].ToString();
-                            details["address"] = sdr["Address"] == DBNull.Value ? "" : sdr["Address"].ToString();
-                            details["applicationNo"] = sdr["application_no"] == DBNull.Value ? "" : sdr["application_no"].ToString();
-                            details["plotArea"] = sdr["plot_area"] == DBNull.Value ? "" : sdr["plot_area"].ToString();
-                            details["constructedArea"] = sdr["constructed_area"] == DBNull.Value ? "" : sdr["constructed_area"].ToString();
-                            details["streetType"] = sdr["street_type"] == DBNull.Value ? "" : sdr["street_type"].ToString();
+                    if (details.Count > 0)
+                    {
+                        // Calculate dynamic dues using existing business logic
+                        decimal dynamicDues = 0;
+                        try
+                        {
+                            PMC.demandbysms dbs = new PMC.demandbysms();
+                            dynamicDues = dbs.getDemandForMutation(propertyId);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log but continue with zero dues
+                            System.Diagnostics.Debug.WriteLine("[PropertyOutstandingHandler] Dues calculation error: " + ex);
+                        }
+                        details["totalDues"] = Math.Round(dynamicDues, 2);
+                        details["paymentStatus"] = (dynamicDues > 0) ? "Pending" : "Paid";
 
-                            // Calculate dynamic dues using existing business logic
-                            decimal dynamicDues = 0;
-                            try
+                        // Floor details (reuse same logic as PropertyLookupHandler for completeness)
+                        var floorDetails = new List<Dictionary<string, object>>();
+                        if (propertyPk > 0)
+                        {
+                            string floorQuery = @"
+                                SELECT 
+                                    fm.floor_no, od.builtup_area, ut.use_type, 
+                                    ugt.usage_type, ctm.contruction_type, otm.occupancy_type
+                                FROM tbl_occupancy_detail od
+                                LEFT JOIN tbl_floor_master fm ON od.floor_id = fm.id
+                                LEFT JOIN tbl_use_type_master ut ON od.use_type_id = ut.id
+                                LEFT JOIN tbl_usage_type_master ugt ON od.usage_type_id = ugt.id
+                                LEFT JOIN tbl_construction_type_master ctm ON od.construction_type_id = ctm.id
+                                LEFT JOIN tbl_occupancy_type_master otm ON od.occupancy_type_id = otm.id
+                                WHERE od.property_id = @PropertyPK AND od.status = 1";
+                            using (SqlCommand fCmd = new SqlCommand(floorQuery, conn))
                             {
-                                PMC.demandbysms dbs = new PMC.demandbysms();
-                                dynamicDues = dbs.getDemandForMutation(propertyId);
-                            }
-                            catch (Exception ex)
-                            {
-                                // Log but continue with zero dues
-                                System.Diagnostics.Debug.WriteLine("[PropertyOutstandingHandler] Dues calculation error: " + ex);
-                            }
-                            details["totalDues"] = Math.Round(dynamicDues, 2);
-                            details["paymentStatus"] = (dynamicDues > 0) ? "Pending" : "Paid";
-
-                            // Floor details (reuse same logic as PropertyLookupHandler for completeness)
-                            var floorDetails = new List<Dictionary<string, object>>();
-                            if (propertyPk > 0)
-                            {
-                                string floorQuery = @"
-                                    SELECT 
-                                        fm.floor_no, od.builtup_area, ut.use_type, 
-                                        ugt.usage_type, ctm.contruction_type, otm.occupancy_type
-                                    FROM tbl_occupancy_detail od
-                                    LEFT JOIN tbl_floor_master fm ON od.floor_id = fm.id
-                                    LEFT JOIN tbl_use_type_master ut ON od.use_type_id = ut.id
-                                    LEFT JOIN tbl_usage_type_master ugt ON od.usage_type_id = ugt.id
-                                    LEFT JOIN tbl_construction_type_master ctm ON od.construction_type_id = ctm.id
-                                    LEFT JOIN tbl_occupancy_type_master otm ON od.occupancy_type_id = otm.id
-                                    WHERE od.property_id = @PropertyPK AND od.status = 1";
-                                using (SqlCommand fCmd = new SqlCommand(floorQuery, conn))
+                                fCmd.Parameters.AddWithValue("@PropertyPK", propertyPk);
+                                using (SqlDataReader fDr = fCmd.ExecuteReader())
                                 {
-                                    fCmd.Parameters.AddWithValue("@PropertyPK", propertyPk);
-                                    using (SqlDataReader fDr = fCmd.ExecuteReader())
+                                    while (fDr.Read())
                                     {
-                                        while (fDr.Read())
+                                        floorDetails.Add(new Dictionary<string, object>
                                         {
-                                            floorDetails.Add(new Dictionary<string, object>
-                                            {
-                                                {"floorNo", fDr["floor_no"] == DBNull.Value ? "" : fDr["floor_no"].ToString()},
-                                                {"builtupArea", fDr["builtup_area"] == DBNull.Value ? "" : fDr["builtup_area"].ToString()},
-                                                {"useType", fDr["use_type"] == DBNull.Value ? "" : fDr["use_type"].ToString()},
-                                                {"usageType", fDr["usage_type"] == DBNull.Value ? "" : fDr["usage_type"].ToString()},
-                                                {"constructionType", fDr["contruction_type"] == DBNull.Value ? "" : fDr["contruction_type"].ToString()},
-                                                {"occupancyType", fDr["occupancy_type"] == DBNull.Value ? "" : fDr["occupancy_type"].ToString()}
-                                            });
-                                        }
+                                            {"floorNo", fDr["floor_no"] == DBNull.Value ? "" : fDr["floor_no"].ToString()},
+                                            {"builtupArea", fDr["builtup_area"] == DBNull.Value ? "" : fDr["builtup_area"].ToString()},
+                                            {"useType", fDr["use_type"] == DBNull.Value ? "" : fDr["use_type"].ToString()},
+                                            {"usageType", fDr["usage_type"] == DBNull.Value ? "" : fDr["usage_type"].ToString()},
+                                            {"constructionType", fDr["contruction_type"] == DBNull.Value ? "" : fDr["contruction_type"].ToString()},
+                                            {"occupancyType", fDr["occupancy_type"] == DBNull.Value ? "" : fDr["occupancy_type"].ToString()}
+                                        });
                                     }
                                 }
                             }
-                            details["floorDetails"] = floorDetails;
-
-                            SendResponse(context, 200, true, "Property data retrieved", details);
                         }
+                        details["floorDetails"] = floorDetails;
+
+                        SendResponse(context, 200, true, "Property data retrieved", details);
+                    }
+                    else
+                    {
+                        SendResponse(context, 404, false, "Property ID not found", null);
                     }
                 }
             }

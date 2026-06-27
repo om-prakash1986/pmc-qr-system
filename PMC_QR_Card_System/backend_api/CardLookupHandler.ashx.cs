@@ -33,11 +33,21 @@ public class CardLookupHandler : IHttpHandler
             string connStr = System.Configuration.ConfigurationManager.ConnectionStrings["PTax"].ConnectionString;
             using (SqlConnection conn = new SqlConnection(connStr))
             {
-                string query = @"SELECT QRId, QRToken, Status, PropertyId, CreatedDate, ActivatedDate, ActivatedBy, QRUrl
-                                 FROM QRMaster
-                                 WHERE QRToken = @Token OR QRId = @QRId OR QRUrl = @QRUrl";
+                string qrQuery = @"
+                    SELECT QRId, QRToken, Status, PropertyId, CreatedDate, ActivatedDate, ActivatedBy, QRUrl
+                    FROM QRMaster
+                    WHERE QRToken = @Token OR QRId = @QRId OR QRUrl = @QRUrl";
 
-                using (SqlCommand cmd = new SqlCommand(query, conn))
+                string rawPropId = "";
+                string qrId = "";
+                string qrToken = "";
+                string status = "";
+                string rawActDate = "";
+                string rawActBy = "";
+                string qrUrl = "";
+                string createdDate = "";
+
+                using (SqlCommand cmd = new SqlCommand(qrQuery, conn))
                 {
                     cmd.Parameters.AddWithValue("@Token", cleanToken);
                     cmd.Parameters.AddWithValue("@QRId",  originalValue);
@@ -48,72 +58,77 @@ public class CardLookupHandler : IHttpHandler
                     {
                         if (sdr.Read())
                         {
-                            string rawPropId  = sdr["PropertyId"]    == DBNull.Value ? "" : sdr["PropertyId"].ToString().Trim();
-                            string rawActDate = sdr["ActivatedDate"] == DBNull.Value ? "" : sdr["ActivatedDate"].ToString().Trim();
-                            string rawActBy   = sdr["ActivatedBy"]   == DBNull.Value ? "" : sdr["ActivatedBy"].ToString().Trim();
-
-                            if (rawPropId.Equals("NULL",  StringComparison.OrdinalIgnoreCase)) rawPropId  = "";
-                            if (rawActDate.Equals("NULL", StringComparison.OrdinalIgnoreCase)) rawActDate = "";
-                            if (rawActBy.Equals("NULL",   StringComparison.OrdinalIgnoreCase)) rawActBy   = "";
-
-                            string formattedActDate = "";
-                            if (!string.IsNullOrEmpty(rawActDate))
-                            {
-                                DateTime dt;
-                                formattedActDate = DateTime.TryParse(rawActDate, out dt)
-                                    ? dt.ToString("yyyy-MM-dd HH:mm:ss") : rawActDate;
-                            }
-
-                            string maskedMobile = "****";
-                            if (!string.IsNullOrEmpty(rawPropId))
-                            {
-                                try
-                                {
-                                    using (SqlConnection conn2 = new SqlConnection(connStr))
-                                    {
-                                        string qMobile = @"
-                                            SELECT TOP 1 own.mobile_no
-                                            FROM tbl_property_detail pd
-                                            LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id
-                                            WHERE pd.pid = @PID AND pd.status IN (1,2,3,4)";
-                                        using (SqlCommand cmd2 = new SqlCommand(qMobile, conn2))
-                                        {
-                                            cmd2.Parameters.AddWithValue("@PID", rawPropId);
-                                            conn2.Open();
-                                            object mobVal = cmd2.ExecuteScalar();
-                                            if (mobVal != null && mobVal != DBNull.Value)
-                                            {
-                                                string cleanMob = mobVal.ToString().Trim();
-                                                if (cleanMob.Length >= 4)
-                                                {
-                                                    maskedMobile = "****" + cleanMob.Substring(cleanMob.Length - 4);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                catch {}
-                            }
-
-                            var cardDetails = new Dictionary<string, object>
-                            {
-                                { "qrId",          sdr["QRId"].ToString()                                                },
-                                { "qrToken",       sdr["QRToken"].ToString()                                             },
-                                { "status",        sdr["Status"].ToString().ToUpper()                                    },
-                                { "propertyId",    rawPropId                                                             },
-                                { "createdDate",   Convert.ToDateTime(sdr["CreatedDate"]).ToString("yyyy-MM-dd HH:mm:ss") },
-                                { "activatedDate", formattedActDate                                                      },
-                                { "activatedBy",   rawActBy                                                              },
-                                { "qrUrl",         sdr["QRUrl"].ToString()                                              },
-                                { "maskedMobile",  maskedMobile                                                          },
-                            };
-                            SendResponse(context, 200, true, "Card found", cardDetails);
-                        }
-                        else
-                        {
-                            SendResponse(context, 404, false, "QR card not found. Please verify the card is registered.", null);
+                            qrId = sdr["QRId"].ToString();
+                            qrToken = sdr["QRToken"].ToString();
+                            status = sdr["Status"].ToString().ToUpper();
+                            rawPropId = sdr["PropertyId"] == DBNull.Value ? "" : sdr["PropertyId"].ToString().Trim();
+                            rawActDate = sdr["ActivatedDate"] == DBNull.Value ? "" : sdr["ActivatedDate"].ToString().Trim();
+                            rawActBy = sdr["ActivatedBy"] == DBNull.Value ? "" : sdr["ActivatedBy"].ToString().Trim();
+                            qrUrl = sdr["QRUrl"] == DBNull.Value ? "" : sdr["QRUrl"].ToString();
+                            createdDate = Convert.ToDateTime(sdr["CreatedDate"]).ToString("yyyy-MM-dd HH:mm:ss");
                         }
                     }
+                }
+
+                if (!string.IsNullOrEmpty(qrId))
+                {
+                    string dbMobile = "";
+                    if (!string.IsNullOrEmpty(rawPropId) && !rawPropId.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string mobileQuery = @"
+                            SELECT TOP 1 own.mobile_no
+                            FROM tbl_property_detail pd
+                            LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id
+                            WHERE pd.pid = @PID AND pd.status IN (1,2,3,4)";
+
+                        using (SqlCommand cmd2 = new SqlCommand(mobileQuery, conn))
+                        {
+                            cmd2.Parameters.AddWithValue("@PID", rawPropId);
+                            using (SqlDataReader sdr2 = cmd2.ExecuteReader())
+                            {
+                                if (sdr2.Read())
+                                {
+                                    dbMobile = sdr2["mobile_no"] == DBNull.Value ? "" : sdr2["mobile_no"].ToString().Trim();
+                                }
+                            }
+                        }
+                    }
+
+                    if (rawPropId.Equals("NULL",  StringComparison.OrdinalIgnoreCase)) rawPropId  = "";
+                    if (rawActDate.Equals("NULL", StringComparison.OrdinalIgnoreCase)) rawActDate = "";
+                    if (rawActBy.Equals("NULL",   StringComparison.OrdinalIgnoreCase)) rawActBy   = "";
+
+                    string formattedActDate = "";
+                    if (!string.IsNullOrEmpty(rawActDate))
+                    {
+                        DateTime dt;
+                        formattedActDate = DateTime.TryParse(rawActDate, out dt)
+                            ? dt.ToString("yyyy-MM-dd HH:mm:ss") : rawActDate;
+                    }
+
+                    string maskedMobile = "****";
+                    if (!string.IsNullOrEmpty(dbMobile) && dbMobile.Length >= 4)
+                    {
+                        maskedMobile = "****" + dbMobile.Substring(dbMobile.Length - 4);
+                    }
+
+                    var cardDetails = new Dictionary<string, object>
+                    {
+                        { "qrId",          qrId },
+                        { "qrToken",       qrToken },
+                        { "status",        status },
+                        { "propertyId",    rawPropId },
+                        { "createdDate",   createdDate },
+                        { "activatedDate", formattedActDate },
+                        { "activatedBy",   rawActBy },
+                        { "qrUrl",         qrUrl },
+                        { "maskedMobile",  maskedMobile },
+                    };
+                    SendResponse(context, 200, true, "Card found", cardDetails);
+                }
+                else
+                {
+                    SendResponse(context, 404, false, "QR card not found. Please verify the card is registered.", null);
                 }
             }
         }

@@ -31,10 +31,11 @@ public class ActivateCardHandler : IHttpHandler
             var serializer = new JavaScriptSerializer();
             var payload    = serializer.Deserialize<Dictionary<string, object>>(requestBody);
 
-            if (payload == null || !payload.ContainsKey("qrid") || !payload.ContainsKey("pid") || !payload.ContainsKey("staff_id"))
-            { SendResponse(context, 400, false, "Missing parameters. Required: qrid, pid, staff_id", null); return; }
+            if (payload == null || (!payload.ContainsKey("qrid") && !payload.ContainsKey("qrtoken")) || !payload.ContainsKey("pid") || !payload.ContainsKey("staff_id"))
+            { SendResponse(context, 400, false, "Missing parameters. Required: qrid or qrtoken, pid, staff_id", null); return; }
 
-            string  qrid     = GetString(payload, "qrid").Trim();
+            string  qrid     = payload.ContainsKey("qrid") ? GetString(payload, "qrid").Trim() : "";
+            string  qrtoken  = payload.ContainsKey("qrtoken") ? GetString(payload, "qrtoken").Trim() : "";
             string  pid      = GetString(payload, "pid").Trim();
             string  staffId  = GetString(payload, "staff_id").Trim();
             string  deviceId = payload.ContainsKey("device_id") ? GetString(payload, "device_id") : "";
@@ -54,12 +55,18 @@ public class ActivateCardHandler : IHttpHandler
                     {
                         // 1. Check QR exists and status
                         string currentStatus = "", existingPid = "";
-                        using (SqlCommand cmd = new SqlCommand("SELECT Status, PropertyId FROM QRMaster WHERE QRId=@QRId", conn, trans))
+                        string resolvedQrId = "";
+                        using (SqlCommand cmd = new SqlCommand("SELECT QRId, Status, PropertyId FROM QRMaster WHERE QRId=@QRId OR (QRToken=@Token AND @Token <> '')", conn, trans))
                         {
                             cmd.Parameters.AddWithValue("@QRId", qrid);
+                            cmd.Parameters.AddWithValue("@Token", qrtoken.Length > 0 ? qrtoken : qrid); // Use qrid as fallback if qrtoken is empty
                             using (SqlDataReader sdr = cmd.ExecuteReader())
                             {
-                                if (sdr.Read()) { currentStatus = sdr["Status"].ToString().ToUpper(); existingPid = sdr["PropertyId"].ToString(); }
+                                if (sdr.Read()) { 
+                                    resolvedQrId = sdr["QRId"].ToString();
+                                    currentStatus = sdr["Status"].ToString().ToUpper(); 
+                                    existingPid = sdr["PropertyId"].ToString(); 
+                                }
                                 else            { sdr.Close(); trans.Rollback(); SendResponse(context, 404, false, "QR card not found in QRMaster.", null); return; }
                             }
                         }
@@ -83,12 +90,12 @@ public class ActivateCardHandler : IHttpHandler
                             cmd.ExecuteNonQuery();
                         }
 
-                        // 4. Activate the new QR card
+                        // 4. Activate the new QR card using resolved QRId
                         using (SqlCommand cmd = new SqlCommand("UPDATE QRMaster SET Status='ACTIVATED', PropertyId=@PID, ActivatedDate=GETDATE(), ActivatedBy=@StaffId WHERE QRId=@QRId", conn, trans))
                         {
                             cmd.Parameters.AddWithValue("@PID",     pid);
                             cmd.Parameters.AddWithValue("@StaffId", staffId);
-                            cmd.Parameters.AddWithValue("@QRId",    qrid);
+                            cmd.Parameters.AddWithValue("@QRId",    resolvedQrId);
                             cmd.ExecuteNonQuery();
                         }
 

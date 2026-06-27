@@ -406,6 +406,7 @@ class ApiService extends ChangeNotifier {
               headers: _headers,
               body: jsonEncode({
                 'qrid': qrId,
+                'qrtoken': qrToken,
                 'pid': pid,
                 'staff_id': staffId,
                 'device_id': 'flutter_device_agent',

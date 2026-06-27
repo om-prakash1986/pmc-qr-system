@@ -45,12 +45,19 @@ class _ScanScreenState extends State<ScanScreen>
   void _handleScanResult(String scannedValue) async {
     if (_isProcessing) return;
 
+    final apiService = Provider.of<ApiService>(context, listen: false);
+
+    if (apiService.currentUser?.role == 'TAX_COLLECTOR') {
+      // Return the scanned QR code value directly to the dashboard
+      Navigator.pop(context, scannedValue);
+      return;
+    }
+
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
     });
 
-    final apiService = Provider.of<ApiService>(context, listen: false);
     final parsedValue = ApiService.extractPayload(scannedValue)['qrId'] ?? scannedValue;
 
     try {

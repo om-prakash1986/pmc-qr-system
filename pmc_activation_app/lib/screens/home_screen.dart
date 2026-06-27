@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
+  final _qrTokenController = TextEditingController();
   bool _isSearching = false;
   String? _errorMessage;
   List<PropertyDetailRow>? _searchResults;
@@ -42,10 +43,18 @@ class _HomeScreenState extends State<HomeScreen> {
       String? targetPid = queryParams['pid'] ?? queryParams['search'];
       String? token = queryParams['token'] ?? queryParams['qrId'] ?? queryParams['value'];
 
+      if (token != null && token.isNotEmpty) {
+        setState(() {
+          _qrTokenController.text = token;
+        });
+      }
+
       if (apiService.currentUser?.role == 'TAX_COLLECTOR') {
         // Feature: Auto-Populate PID from QR Code Scan to Tax Collector Dashboard
         if (targetPid != null && targetPid.isNotEmpty) {
-          _searchController.text = targetPid;
+          setState(() {
+            _searchController.text = targetPid;
+          });
           _searchPropertyDetails(apiService);
         } else if (token != null && token.isNotEmpty) {
           // If no PID in payload, fallback to looking up the token
@@ -118,6 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _qrTokenController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -746,6 +756,28 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_qrTokenController.text.isNotEmpty) ...[
+                  TextField(
+                    controller: _qrTokenController,
+                    readOnly: true,
+                    style: GoogleFonts.outfit(color: PmcTheme.textDark, fontWeight: FontWeight.bold, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Scanned Card Token',
+                      prefixIcon: const Icon(Icons.qr_code_2_rounded, color: PmcTheme.secondaryOrange),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.clear_rounded, color: PmcTheme.dangerRed),
+                        onPressed: () {
+                          setState(() {
+                            _qrTokenController.clear();
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -758,16 +790,72 @@ class _HomeScreenState extends State<HomeScreen> {
                         onSubmitted: (_) => _searchPropertyDetails(apiService),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      onPressed: _isSearching ? null : () => _searchPropertyDetails(apiService),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: PmcTheme.secondaryOrange,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    const SizedBox(width: 8),
+                    // Scanner Button
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final scannedResult = await Navigator.pushNamed(context, '/scan');
+                          if (scannedResult is String && scannedResult.isNotEmpty) {
+                            final payload = ApiService.extractPayload(scannedResult);
+                            final tokenVal = payload['qrId'];
+                            final pidVal = payload['pid'];
+                            
+                            setState(() {
+                              _errorMessage = null;
+                              if (tokenVal != null) {
+                                _qrTokenController.text = tokenVal;
+                              }
+                              if (pidVal != null && pidVal.isNotEmpty) {
+                                _searchController.text = pidVal;
+                                _searchPropertyDetails(apiService);
+                              } else if (tokenVal != null && tokenVal.isNotEmpty) {
+                                _isSearching = true;
+                              }
+                            });
+
+                            if (pidVal == null && tokenVal != null && tokenVal.isNotEmpty) {
+                              try {
+                                final card = await apiService.lookupCard(tokenVal);
+                                if (card.propertyId.isNotEmpty) {
+                                  setState(() {
+                                    _searchController.text = card.propertyId;
+                                  });
+                                  _searchPropertyDetails(apiService);
+                                }
+                              } catch (e) {
+                                setState(() {
+                                  _errorMessage = e.toString().replaceAll('Exception: ', '');
+                                });
+                              } finally {
+                                setState(() {
+                                  _isSearching = false;
+                                });
+                              }
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: PmcTheme.primaryBlue,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
                       ),
-                      child: _isSearching
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('SEARCH'),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isSearching ? null : () => _searchPropertyDetails(apiService),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: PmcTheme.secondaryOrange,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        child: _isSearching
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('SEARCH'),
+                      ),
                     ),
                   ],
                 ),

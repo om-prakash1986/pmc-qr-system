@@ -225,25 +225,30 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
     // Read optional token passed via routing
     final routeArgs =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    String? token = routeArgs != null && routeArgs.containsKey('token')
-        ? routeArgs['token']
+    String? token = routeArgs != null
+        ? (routeArgs['token'] ?? routeArgs['qrId'] ?? routeArgs['value'])?.toString()
         : null;
     if ((token == null || token.isEmpty) && _tokenController.text.isEmpty) {
       token =
           Uri.base.queryParameters['token'] ??
-          Uri.base.queryParameters['value'];
+          Uri.base.queryParameters['value'] ??
+          Uri.base.queryParameters['qrId'];
       if (token == null || token.isEmpty) {
         final href = Uri.base.toString();
         if (href.contains('token=')) {
           token = href.split('token=').last.split('&').first;
         } else if (href.contains('value=')) {
           token = href.split('value=').last.split('&').first;
+        } else if (href.contains('qrId=')) {
+          token = href.split('qrId=').last.split('&').first;
         }
       }
     }
     if (token != null && token.isNotEmpty && _tokenController.text.isEmpty) {
-      _tokenController.text = ApiService.extractPayload(token)['qrId'] ?? token;
+      final cleanToken = ApiService.extractPayload(token)['qrId'] ?? token;
+      _tokenController.text = cleanToken;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {});
         _verifyCardToken();
       });
     }
