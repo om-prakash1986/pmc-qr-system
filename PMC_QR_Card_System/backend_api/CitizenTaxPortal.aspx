@@ -571,6 +571,63 @@
             to { transform: rotate(360deg); }
         }
 
+        /* ── CARD-WISE DETAILS DESIGN ── */
+        .floor-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 12px;
+        }
+        .floor-item-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+        .floor-item-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .floor-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 8px;
+        }
+        .floor-card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--secondary-light);
+        }
+        .floor-card-badge {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(13, 62, 115, 0.2);
+            color: var(--secondary-light);
+            border: 1px solid rgba(13, 62, 115, 0.4);
+        }
+        .floor-card-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .floor-card-label {
+            color: var(--text-muted);
+        }
+        .floor-card-value {
+            font-weight: 500;
+            color: #fff;
+        }
+
         /* ── RESPONSIVE DESIGN ── */
         @media (max-width: 480px) {
             .glass-card {
@@ -818,22 +875,31 @@
                     </div>
                 </div>
 
-                <!-- Occupancy structure section -->
+                <!-- Occupancy structure section (Card Grid) -->
                 <div class="floor-section">
-                    <div class="form-label" style="margin-bottom: 10px;">Building Structure Details</div>
-                    <table class="floor-table">
-                        <thead>
-                            <tr>
-                                <th>Floor</th>
-                                <th>Usage</th>
-                                <th>Built Area (Sqft)</th>
-                                <th>Type</th>
-                            </tr>
-                        </thead>
-                        <tbody id="floor-table-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
-                    </table>
+                    <div class="form-label" style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                        </svg>
+                        <span>Building Structure & Occupancy Details</span>
+                    </div>
+                    <div id="floor-card-grid" class="floor-card-grid">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Tax History Section (Card Grid) -->
+                <div class="history-section" style="margin-top: 24px; margin-bottom: 24px;">
+                    <div class="form-label" style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                        </svg>
+                        <span>Property Tax Assessment History</span>
+                    </div>
+                    <div id="tax-history-grid" class="floor-card-grid">
+                        <!-- Populated dynamically -->
+                    </div>
                 </div>
 
                 <button id="btn-logout" class="btn btn-outline">
@@ -1127,31 +1193,50 @@
             document.getElementById('pvc-card-qrid').innerText = 'QR TOKEN: ' + scanToken;
 
             // PVC Card Details (Back)
-            document.getElementById('pvc-card-circle').innerText = prop.circle || 'Patliputra Circle';
-            document.getElementById('pvc-card-ward').innerText = prop.wardNo || '15';
+            document.getElementById('pvc-card-circle').innerText = prop.circle || 'N/A';
+            document.getElementById('pvc-card-ward').innerText = prop.wardNo ? ('Ward ' + prop.wardNo) : 'N/A';
             document.getElementById('pvc-card-plot').innerText = (prop.plotArea || '0') + ' Sqft';
             document.getElementById('pvc-card-built').innerText = (prop.constructedArea || '0') + ' Sqft';
 
-            // Floor structure
-            const tableBody = document.getElementById('floor-table-body');
-            tableBody.innerHTML = '';
-            
-            if (prop.floorDetails && prop.floorDetails.length > 0) {
-                prop.floorDetails.forEach(f => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${f.floorNo || 'Ground Floor'}</td>
-                        <td>${f.useType || 'Residential'}</td>
-                        <td>${f.builtupArea || '0'}</td>
-                        <td>${f.constructionType || 'Pucca'}</td>
-                    `;
-                    tableBody.appendChild(row);
-                });
-            } else {
-                const emptyRow = document.createElement('tr');
-                emptyRow.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-muted);">No structural details available.</td>`;
-                tableBody.appendChild(emptyRow);
+            // Occupancy Details (Card-wise grid)
+            const cardGrid = document.getElementById('floor-card-grid');
+            if (cardGrid) {
+                cardGrid.innerHTML = '';
+                if (prop.floorDetails && prop.floorDetails.length > 0) {
+                    prop.floorDetails.forEach(f => {
+                        const card = document.createElement('div');
+                        card.className = 'floor-item-card';
+                        card.innerHTML = `
+                            <div class="floor-card-header">
+                                <span class="floor-card-title">${f.floorNo || 'Ground Floor'}</span>
+                                <span class="floor-card-badge">${f.useType || 'Residential'}</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Built Area</span>
+                                <span class="floor-card-value">${f.builtupArea || '0'} Sqft</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Sub-Usage</span>
+                                <span class="floor-card-value">${f.usageType || 'N/A'}</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Structure Type</span>
+                                <span class="floor-card-value">${f.constructionType || 'Pucca'}</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Occupancy Mode</span>
+                                <span class="floor-card-value">${f.occupancyType || 'Self-Occupied'}</span>
+                            </div>
+                        `;
+                        cardGrid.appendChild(card);
+                    });
+                } else {
+                    cardGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 20px;">No occupancy structure details available.</div>`;
+                }
             }
+
+            // Fetch and load property tax history card wise
+            fetchTaxHistory(prop.pid);
 
             showStep('dashboard');
             
@@ -1163,6 +1248,57 @@
         function flipPvcCard() {
             const card = document.getElementById('digital-pvc-card');
             card.style.transform = card.style.transform === 'rotateY(180deg)' ? 'rotateY(0deg)' : 'rotateY(180deg)';
+        }
+
+        async function fetchTaxHistory(pid) {
+            const grid = document.getElementById('tax-history-grid');
+            if (!grid) return;
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-muted);"><div class="spinner" style="display:inline-block; margin-right:8px;"></div>Loading history...</div>';
+
+            try {
+                const res = await fetch(API_BASE + 'TaxHistoryHandler.ashx?pid=' + encodeURIComponent(pid));
+                const data = await res.json();
+
+                grid.innerHTML = '';
+                if (data.success && data.data && data.data.length > 0) {
+                    data.data.forEach(h => {
+                        const card = document.createElement('div');
+                        card.className = 'floor-item-card';
+                        
+                        let yearText = h.fin_year || 'Current Assessment';
+                        let isTotal = h.fin_year === 'TOTAL';
+                        
+                        if (isTotal) {
+                            card.style.borderColor = 'rgba(46,204,113,0.3)';
+                            card.style.background = 'rgba(46,204,113,0.02)';
+                        }
+
+                        card.innerHTML = `
+                            <div class="floor-card-header">
+                                <span class="floor-card-title">${yearText}</span>
+                                <span class="floor-card-badge" style="${isTotal ? 'background:rgba(46,204,113,0.2); color:#2ECC71; border-color:rgba(46,204,113,0.4);' : ''}">${isTotal ? 'Accumulated' : 'Yearly'}</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Floor Tax</span>
+                                <span class="floor-card-value">\u20B9${parseFloat(h.floor_tax).toFixed(2)}</span>
+                            </div>
+                            <div class="floor-card-row">
+                                <span class="floor-card-label">Vacant Land Tax</span>
+                                <span class="floor-card-value">\u20B9${parseFloat(h.vacant_tax).toFixed(2)}</span>
+                            </div>
+                            <div class="floor-card-row" style="border-top:1px solid rgba(255,255,255,0.05); padding-top:8px; font-weight:700;">
+                                <span class="floor-card-label" style="color:#fff;">Total Assessed Tax</span>
+                                <span class="floor-card-value" style="color:${isTotal ? '#2ECC71' : 'var(--secondary)'};">\u20B9${parseFloat(h.total_tax).toFixed(2)}</span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--text-muted);">No historical tax assessments found.</div>';
+                }
+            } catch (err) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--error);">Failed to load tax history: ' + err.message + '</div>';
+            }
         }
 
         // ── RAZORPAY CHECKOUT INTEGRATION ──

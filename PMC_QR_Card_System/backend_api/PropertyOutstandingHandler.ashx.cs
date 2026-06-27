@@ -53,10 +53,14 @@ public class PropertyOutstandingHandler : IHttpHandler
                             pd.plot_area,
                             pd.constructed_area,
                             stm.street_type,
+                            wm.ward_no AS Ward_No,
+                            cm.circle_name AS Circle,
                             pd.id as property_pk 
                         FROM tbl_property_detail pd 
                         LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id 
                         LEFT JOIN tbl_street_type_master stm ON pd.street_type_id = stm.id 
+                        LEFT JOIN tbl_ward_master wm ON pd.ward_id = wm.id
+                        LEFT JOIN tbl_circle_master cm ON wm.circle_id = cm.id
                         WHERE pd.PID = @PID AND pd.status IN (1,2,3,4)";
                     var details = new Dictionary<string, object>();
                     long propertyPk = 0;
@@ -78,6 +82,8 @@ public class PropertyOutstandingHandler : IHttpHandler
                                 details["plotArea"] = sdr["plot_area"] == DBNull.Value ? "" : sdr["plot_area"].ToString();
                                 details["constructedArea"] = sdr["constructed_area"] == DBNull.Value ? "" : sdr["constructed_area"].ToString();
                                 details["streetType"] = sdr["street_type"] == DBNull.Value ? "" : sdr["street_type"].ToString();
+                                details["circle"] = sdr["Circle"] == DBNull.Value ? "" : sdr["Circle"].ToString();
+                                details["wardNo"] = sdr["Ward_No"] == DBNull.Value ? "" : sdr["Ward_No"].ToString();
                             }
                         }
                     }
