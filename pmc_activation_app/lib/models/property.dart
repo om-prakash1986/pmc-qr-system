@@ -9,6 +9,14 @@ class Property {
   final String circle;
   final String revenueCircleNo;
   final String wardNo;
+  
+  // Extended fields
+  final String sasNo;
+  final String plotArea;
+  final String constructedArea;
+  final String streetType;
+  final String currentAmount;
+  final List<dynamic> floorDetails;
 
   Property({
     required this.pid,
@@ -21,6 +29,12 @@ class Property {
     required this.circle,
     required this.revenueCircleNo,
     required this.wardNo,
+    required this.sasNo,
+    required this.plotArea,
+    required this.constructedArea,
+    required this.streetType,
+    required this.currentAmount,
+    required this.floorDetails,
   });
 
   factory Property.fromJson(Map<String, dynamic> json) {
@@ -35,6 +49,12 @@ class Property {
       circle: json['circle'] as String? ?? '',
       revenueCircleNo: json['revenueCircleNo'] as String? ?? '',
       wardNo: json['wardNo'] as String? ?? '',
+      sasNo: json['sasNo'] as String? ?? '',
+      plotArea: json['plotArea'] as String? ?? '',
+      constructedArea: json['constructedArea'] as String? ?? '',
+      streetType: json['streetType'] as String? ?? '',
+      currentAmount: json['currentAmount'] as String? ?? '0',
+      floorDetails: json['floorDetails'] as List<dynamic>? ?? [],
     );
   }
 
@@ -50,6 +70,12 @@ class Property {
       'circle': circle,
       'revenueCircleNo': revenueCircleNo,
       'wardNo': wardNo,
+      'sasNo': sasNo,
+      'plotArea': plotArea,
+      'constructedArea': constructedArea,
+      'streetType': streetType,
+      'currentAmount': currentAmount,
+      'floorDetails': floorDetails,
     };
   }
 }

@@ -32,12 +32,12 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
   // Data retrieved
   QrCard? _scannedCard;
   Property? _property;
-  String _simulatedOtp = '123456';
   bool _isCardFlipped = false;
 
   // Animation controllers
   late AnimationController _confettiController;
   bool _showConfetti = false;
+  bool _showDebugDot = true; // Debug indicator overlay
 
   @override
   void initState() {
@@ -113,6 +113,7 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
       final property = await apiService.lookupProperty(card.propertyId);
 
       setState(() {
+        _tokenController.text = card.qrId;
         _scannedCard = card;
         _property = property;
         _isLoading = false;
@@ -143,46 +144,14 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
     final apiService = Provider.of<ApiService>(context, listen: false);
 
     try {
-      // Use pre-fetched property to check registered mobile
-      final prop = _property!;
-
-      // Verification check (allow 9431881414 as override for simulator usability)
-      if (prop.mobileNo != mobile && mobile != '9431881414') {
-        throw Exception(
-          'The mobile number entered is not registered with this property. Registered mobile ends in: ${prop.mobileNo.substring(prop.mobileNo.length - 4)}',
-        );
-      }
-
-      // Generate random simulated OTP
-      _simulatedOtp = (100000 + (DateTime.now().millisecond * 900) % 900000)
-          .toInt()
-          .toString();
+      // Call real CitizenPortal.ashx?action=send_otp
+      final token = _scannedCard?.qrId ?? _tokenController.text.trim();
+      await apiService.sendOtp(token: token, mobile: mobile);
 
       setState(() {
         _isLoading = false;
         _currentStep = 'otp';
       });
-
-      // Show Toast / Dialog displaying the simulated OTP for testing
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '⚡ DEMO SMS: Verification OTP for your property is $_simulatedOtp',
-          ),
-          backgroundColor: PmcTheme.secondaryOrange,
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: 'AUTOFILL',
-            textColor: Colors.white,
-            onPressed: () {
-              for (int i = 0; i < 6; i++) {
-                _otpControllers[i].text = _simulatedOtp[i];
-              }
-              _verifyOtp();
-            },
-          ),
-        ),
-      );
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -191,7 +160,7 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
     }
   }
 
-  void _verifyOtp() {
+  void _verifyOtp() async {
     String enteredOtp = '';
     for (var controller in _otpControllers) {
       enteredOtp += controller.text.trim();
@@ -205,24 +174,37 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
       return;
     }
 
-    if (enteredOtp != _simulatedOtp && enteredOtp != '123456') {
-      setState(
-        () => _errorMessage = 'Invalid verification code. Please try again.',
-      );
-      return;
-    }
-
     setState(() {
-      _currentStep = 'dashboard';
+      _isLoading = true;
       _errorMessage = null;
-      _showConfetti = true;
     });
 
-    _confettiController.forward(from: 0.0).then((_) {
+    final apiService = Provider.of<ApiService>(context, listen: false);
+
+    try {
+      // Call real CitizenPortal.ashx?action=verify_otp → hits getDemandForMutation on server
+      final token = _scannedCard?.qrId ?? _tokenController.text.trim();
+      final property = await apiService.verifyOtp(token: token, otp: enteredOtp);
+
       setState(() {
-        _showConfetti = false;
+        _isLoading = false;
+        _property = property;
+        _currentStep = 'dashboard';
+        _errorMessage = null;
+        _showConfetti = true;
       });
-    });
+
+      _confettiController.forward(from: 0.0).then((_) {
+        setState(() {
+          _showConfetti = false;
+        });
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    }
   }
 
   void _resetFlow() {
@@ -260,7 +242,7 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
       }
     }
     if (token != null && token.isNotEmpty && _tokenController.text.isEmpty) {
-      _tokenController.text = token;
+      _tokenController.text = ApiService.extractPayload(token)['qrId'] ?? token;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _verifyCardToken();
       });
@@ -354,6 +336,28 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
               ),
             ),
           ),
+
+          // Debug red dot overlay
+          if (_showDebugDot)
+            Positioned(
+              top: 18,
+              right: 18,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.redAccent.withOpacity(0.65),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // Celebrate Confetti Overlay
           if (_showConfetti)
@@ -548,8 +552,11 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
 
   Widget _buildMobileStep() {
     final apiService = Provider.of<ApiService>(context);
+    final bool hasMobile = _property != null && 
+                           _property!.mobileNo.trim().isNotEmpty && 
+                           _property!.mobileNo.trim().toUpperCase() != 'NULL';
     String last4 = '****';
-    if (_property != null && _property!.mobileNo.length >= 4) {
+    if (hasMobile && _property!.mobileNo.length >= 4) {
       last4 = _property!.mobileNo.substring(_property!.mobileNo.length - 4);
     }
 
@@ -574,7 +581,9 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Verification Required:\nLinked registered mobile ends in: ****$last4',
+                  hasMobile
+                      ? 'Verification Required:\nLinked registered mobile ends in: ****$last4'
+                      : 'No registered mobile number on file. Please enter your mobile number to register and verify.',
                   style: GoogleFonts.outfit(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 12.5,
@@ -612,25 +621,7 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
             ),
           ),
         ),
-        if (apiService.isSimulated) ...[
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () {
-              _mobileController.text = _scannedCard!.propertyId == '1409113'
-                  ? '9431881414'
-                  : '9199774991';
-            },
-            child: Text(
-              '💡 Demo Auto-Fill: ${_scannedCard!.propertyId == "1409113" ? "9431881414" : "9199774991"} (Tap)',
-              style: GoogleFonts.outfit(
-                color: Colors.yellow.shade600,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
+
         const SizedBox(height: 20),
         ElevatedButton(
           onPressed: _isLoading ? null : _sendOtp,
@@ -667,7 +658,7 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'We have simulated/sent a 6-digit OTP to your registered mobile ending in: ${_mobileController.text.substring(6)}',
+          'An OTP has been sent to your registered mobile ending in: ****${_mobileController.text.length >= 4 ? _mobileController.text.substring(_mobileController.text.length - 4) : "****"}',
           style: GoogleFonts.outfit(
             color: PmcTheme.textDarkSecondary,
             fontSize: 12,
@@ -838,16 +829,31 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '₹${_property!.totalDues}',
-                    style: GoogleFonts.outfit(
-                      color: duesAmt > 0
-                          ? PmcTheme.secondaryOrange
-                          : PmcTheme.successGreen,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Outstanding: ₹${_property!.totalDues}',
+                        style: GoogleFonts.outfit(
+                          color: duesAmt > 0
+                              ? PmcTheme.secondaryOrange
+                              : PmcTheme.successGreen,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Current Amount: ₹${_property!.currentAmount}',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                   if (duesAmt > 0)
                     ElevatedButton(
@@ -880,13 +886,27 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
           isHighlighted: true,
         ),
         _buildPropertyRow(
+          'SAS No',
+          _property!.sasNo.isNotEmpty ? _property!.sasNo : 'N/A',
+        ),
+        _buildPropertyRow(
           'Registered Owner',
           _property!.ownerName,
           valueColor: PmcTheme.secondaryOrange,
         ),
         _buildPropertyRow('Father/Guardian', _property!.guardianName),
         _buildPropertyRow('Holding Address', _property!.address),
+        _buildPropertyRow('Street Type', _property!.streetType.isNotEmpty ? _property!.streetType : 'N/A'),
 
+        Row(
+          children: [
+            Expanded(child: _buildPropertyRow('Plot Area', _property!.plotArea.isNotEmpty ? '${_property!.plotArea} sq.ft' : 'N/A')),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildPropertyRow('Constructed Area', _property!.constructedArea.isNotEmpty ? '${_property!.constructedArea} sq.ft' : 'N/A'),
+            ),
+          ],
+        ),
         Row(
           children: [
             Expanded(child: _buildPropertyRow('Ward No', _property!.wardNo)),
@@ -896,6 +916,55 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
             ),
           ],
         ),
+
+        if (_property!.floorDetails.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Floor-wise Details',
+            style: GoogleFonts.outfit(
+              color: PmcTheme.secondaryOrange,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ..._property!.floorDetails.map((floor) => Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Floor: ${floor["floorNo"] ?? "N/A"}',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    Text(
+                      'Builtup: ${floor["builtupArea"] ?? "N/A"} sq.ft',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Use: ${floor["useType"] ?? "N/A"} | Usage: ${floor["usageType"] ?? "N/A"}',
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
+                ),
+                Text(
+                  'Construction: ${floor["constructionType"] ?? "N/A"} | Occupancy: ${floor["occupancyType"] ?? "N/A"}',
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
+                ),
+              ],
+            ),
+          )).toList(),
+        ],
         const SizedBox(height: 12),
         const Divider(color: Colors.white12, height: 1),
         const SizedBox(height: 16),
@@ -1382,6 +1451,12 @@ class _CitizenPortalScreenState extends State<CitizenPortalScreen>
                                       circle: _property!.circle,
                                       revenueCircleNo: _property!.revenueCircleNo,
                                       wardNo: _property!.wardNo,
+                                      sasNo: _property!.sasNo,
+                                      plotArea: _property!.plotArea,
+                                      constructedArea: _property!.constructedArea,
+                                      streetType: _property!.streetType,
+                                      currentAmount: '0.00',
+                                      floorDetails: _property!.floorDetails,
                                     );
                                     _showConfetti = true;
                                   });

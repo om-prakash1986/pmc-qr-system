@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../models/qr_card.dart';
@@ -50,10 +51,11 @@ class _ScanScreenState extends State<ScanScreen>
     });
 
     final apiService = Provider.of<ApiService>(context, listen: false);
+    final parsedValue = ApiService.extractPayload(scannedValue)['qrId'] ?? scannedValue;
 
     try {
       // Look up QR Card details in DB/API
-      final qrCard = await apiService.lookupCard(scannedValue);
+      final qrCard = await apiService.lookupCard(parsedValue);
 
       setState(() {
         _isProcessing = false;
@@ -72,38 +74,6 @@ class _ScanScreenState extends State<ScanScreen>
   @override
   Widget build(BuildContext context) {
     final apiService = Provider.of<ApiService>(context);
-
-    // List of mock cards available for quick click testing in simulated mode
-    final testCards = [
-      {
-        'label': 'Test Card 1 (Unassigned)',
-        'token': 'CEF733F3-7416-4FFA-87F4-2D4361DA8791',
-        'url':
-            'https://pmc.bihar.gov.in/qr/CEF733F3-7416-4FFA-87F4-2D4361DA8791',
-        'qrid': 'PMC/IND/DQR/00457417',
-      },
-      {
-        'label': 'Test Card 2 (Unassigned)',
-        'token': '4F23CAC1-2D0E-406A-A0DB-54300D5C46EB',
-        'url':
-            'https://pmc.bihar.gov.in/qr/4F23CAC1-2D0E-406A-A0DB-54300D5C46EB',
-        'qrid': 'PMC/IND/DQR/00457418',
-      },
-      {
-        'label': 'Test Card 3 (Unassigned)',
-        'token': 'BF388527-E492-4176-AC8E-0042633BADB3',
-        'url':
-            'https://pmc.bihar.gov.in/qr/BF388527-E492-4176-AC8E-0042633BADB3',
-        'qrid': 'PMC/IND/DQR/00457419',
-      },
-      {
-        'label': 'Activated Card (Security Block Test)',
-        'token': '5A9F9999-BB99-99AA-AA99-AA9999999999',
-        'url':
-            'https://pmc.bihar.gov.in/qr/5A9F9999-BB99-99AA-AA99-AA9999999999',
-        'qrid': 'PMC/IND/DQR/00004567',
-      },
-    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -148,20 +118,32 @@ class _ScanScreenState extends State<ScanScreen>
                   ),
                   child: Stack(
                     children: [
+                      // Real Camera Scanner
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: MobileScanner(
+                          controller: MobileScannerController(
+                            detectionSpeed: DetectionSpeed.noDuplicates,
+                            facing: CameraFacing.back,
+                          ),
+                          onDetect: (capture) {
+                            if (_isProcessing) return;
+                            final List<Barcode> barcodes = capture.barcodes;
+                            if (barcodes.isNotEmpty) {
+                              final barcode = barcodes.first;
+                              if (barcode.rawValue != null) {
+                                _handleScanResult(barcode.rawValue!);
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                      
                       // Viewfinder border indicators (corners)
                       _buildCornerBorder(top: 10, left: 10, angle: 0),
                       _buildCornerBorder(top: 10, right: 10, angle: 1.57),
                       _buildCornerBorder(bottom: 10, left: 10, angle: 4.71),
                       _buildCornerBorder(bottom: 10, right: 10, angle: 3.14),
-
-                      // QR Code placeholder icon in background
-                      Center(
-                        child: Icon(
-                          Icons.qr_code_2_rounded,
-                          size: 140,
-                          color: Colors.grey.withOpacity(0.2),
-                        ),
-                      ),
 
                       // Laser scanner line
                       AnimatedBuilder(
@@ -304,48 +286,7 @@ class _ScanScreenState extends State<ScanScreen>
               ),
               const SizedBox(height: 20),
 
-              // 5. Simulated QR Code Quick selector (Tapped triggers scanning lookup)
-              if (apiService.isSimulated) ...[
-                Text(
-                  'Simulation Quick Tap (Tap to simulate scan)',
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: PmcTheme.textLight,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ...testCards.map((card) {
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      dense: true,
-                      leading: const Icon(
-                        Icons.qr_code_rounded,
-                        color: PmcTheme.primaryBlue,
-                      ),
-                      title: Text(
-                        card['label']!,
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w600,
-                          color: PmcTheme.textDark,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Token: ${card['token']!.substring(0, 8)}... | ID: ${card['qrid']}',
-                        style: GoogleFonts.outfit(fontSize: 11),
-                      ),
-                      trailing: const Icon(
-                        Icons.tap_and_play_rounded,
-                        color: PmcTheme.secondaryOrange,
-                      ),
-                      onTap: _isProcessing
-                          ? null
-                          : () => _handleScanResult(card['url']!),
-                    ),
-                  );
-                }).toList(),
-              ],
+
             ],
           ),
         ),

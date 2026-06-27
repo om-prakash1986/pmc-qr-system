@@ -18,6 +18,7 @@ class PropertyDetailRow {
   final String revenueCircleNo;
   final String circle;
   final String ward;
+  final String totalDues;
 
   PropertyDetailRow({
     required this.pid,
@@ -39,6 +40,7 @@ class PropertyDetailRow {
     required this.revenueCircleNo,
     required this.circle,
     required this.ward,
+    required this.totalDues,
   });
 
   factory PropertyDetailRow.fromJson(Map<String, dynamic> json) {
@@ -62,6 +64,7 @@ class PropertyDetailRow {
       revenueCircleNo: json['revenue_circle_no']?.toString() ?? '',
       circle: json['circle']?.toString() ?? '',
       ward: json['ward']?.toString() ?? '',
+      totalDues: json['total_dues']?.toString() ?? '0',
     );
   }
 }

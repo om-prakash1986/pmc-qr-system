@@ -9,16 +9,7 @@ using System.Web.Script.Serialization;
 /// AdminDashboardHandler.ashx.cs
 /// Code-behind for the PMC Admin Dashboard aggregate API.
 ///
-/// Endpoint: GET /AdminDashboardHandler.ashx?action=&lt;action&gt;&amp;period=&lt;day|month|year&gt;&amp;date=YYYY-MM-DD
-///
-/// Actions:
-///   (none)           – All data in one shot (dashboard on load)
-///   kpis             – KPI totals
-///   activators       – Card activator list with counts
-///   tax_collectors   – Tax collector list
-///   citizens         – Citizen/property list
-///   revenue          – Ward breakdown + time-series trend
-///   card_status      – QR card status counts for donut chart
+/// Endpoint: GET /AdminDashboardHandler.ashx?action=<action>&period=<day|month|year>&date=YYYY-MM-DD
 /// </summary>
 public class AdminDashboardHandler : IHttpHandler
 {
@@ -68,9 +59,6 @@ public class AdminDashboardHandler : IHttpHandler
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // ALL-IN-ONE
-    // ─────────────────────────────────────────────────────────────────
     private void HandleAll(HttpContext context, string connStr, string period, DateTime date)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -89,9 +77,6 @@ public class AdminDashboardHandler : IHttpHandler
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // KPI TOTALS
-    // ─────────────────────────────────────────────────────────────────
     private void HandleKpis(HttpContext context, string connStr, string period, DateTime date)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -107,11 +92,11 @@ public class AdminDashboardHandler : IHttpHandler
         int     todayActivations    = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM tbl_QR_ScanLog WHERE Scan_Type='ACTIVATION' AND CAST(Scan_Timestamp AS DATE)=CAST(GETDATE() AS DATE)");
         int     activeTaxCollectors = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM tbl_QR_StaffUsers WHERE IsActive=1 AND Role IN ('TAX_COLLECTOR','TAXCOLLECTOR','Tax Collector')");
         int     totalActivators     = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM tbl_QR_StaffUsers WHERE IsActive=1");
-        int     citizensRegistered  = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM All_Demand WHERE Card_Status='ACTIVE'");
-        int     totalCitizens       = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM All_Demand");
-        decimal totalRevenue        = ExecScalar<decimal>(conn, "SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid'");
-        decimal monthRevenue        = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid' AND MONTH(ISNULL(Last_Scanned,GETDATE()))=MONTH(GETDATE()) AND YEAR(ISNULL(Last_Scanned,GETDATE()))=YEAR(GETDATE())");
-        decimal todayRevenue        = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid' AND CAST(ISNULL(Last_Scanned,GETDATE()) AS DATE)=CAST(GETDATE() AS DATE)");
+        int     citizensRegistered  = ExecScalar<int>(conn,     "SELECT COUNT(DISTINCT PropertyId) FROM QRMaster WHERE Status='ACTIVATED'");
+        int     totalCitizens       = ExecScalar<int>(conn,     "SELECT COUNT(*) FROM tbl_property_detail WHERE status IN (1,2,3,4)");
+        decimal totalRevenue        = ExecScalar<decimal>(conn, "SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4)");
+        decimal monthRevenue        = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4) AND MONTH(ISNULL(pd.last_payment_date,GETDATE()))=MONTH(GETDATE()) AND YEAR(ISNULL(pd.last_payment_date,GETDATE()))=YEAR(GETDATE())");
+        decimal todayRevenue        = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4) AND CAST(ISNULL(pd.last_payment_date,GETDATE()) AS DATE)=CAST(GETDATE() AS DATE)");
 
         return new Dictionary<string, object>
         {
@@ -127,9 +112,6 @@ public class AdminDashboardHandler : IHttpHandler
         };
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // CARD ACTIVATORS
-    // ─────────────────────────────────────────────────────────────────
     private void HandleActivators(HttpContext context, string connStr, string period, DateTime date)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -183,7 +165,7 @@ public class AdminDashboardHandler : IHttpHandler
                     { "staffId",   r["StaffId"].ToString()                                              },
                     { "loginId",   r["LoginId"].ToString()                                              },
                     { "fullName",  r["FullName"].ToString()                                             },
-                    { "wardNo",    r["Ward_No"] == DBNull.Value ? 0 : Convert.ToInt32(r["Ward_No"])     },
+                    { "wardNo",    r["Ward_No"] == DBNull.Value ? "" : r["Ward_No"].ToString()          },
                     { "circle",    r["Circle"]  == DBNull.Value ? "" : r["Circle"].ToString()           },
                     { "mobile",    r["Mobile"]  == DBNull.Value ? "" : r["Mobile"].ToString()           },
                     { "status",    isActive ? "Active" : "Inactive"                                     },
@@ -197,9 +179,6 @@ public class AdminDashboardHandler : IHttpHandler
         return list;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // TAX COLLECTORS
-    // ─────────────────────────────────────────────────────────────────
     private void HandleTaxCollectors(HttpContext context, string connStr)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -224,14 +203,19 @@ public class AdminDashboardHandler : IHttpHandler
                 GROUP BY Staff_Id
             ) visits ON visits.Staff_Id = u.LoginId
             LEFT JOIN (
-                SELECT Ward_No, SUM(CAST(Total_Dues AS DECIMAL(18,2))) AS collected
-                FROM All_Demand WHERE Payment_Status='Paid'
-                GROUP BY Ward_No
-            ) rev ON rev.Ward_No = u.Ward_No
+                SELECT pd.ward_id, SUM(CAST(y.total_tax AS DECIMAL(18,2))) AS collected
+                FROM tbl_yearly_tax_assessment y
+                JOIN tbl_property_detail pd ON pd.id = y.property_id
+                WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4)
+                GROUP BY pd.ward_id
+            ) rev ON rev.ward_id = CAST(u.Ward_No AS VARCHAR(50))
             LEFT JOIN (
-                SELECT Ward_No, SUM(CAST(Total_Dues AS DECIMAL(18,2))) AS target
-                FROM All_Demand GROUP BY Ward_No
-            ) tgt ON tgt.Ward_No = u.Ward_No
+                SELECT pd.ward_id, SUM(CAST(y.total_tax AS DECIMAL(18,2))) AS target
+                FROM tbl_yearly_tax_assessment y
+                JOIN tbl_property_detail pd ON pd.id = y.property_id
+                WHERE y.paid_status = 0 AND pd.status IN (1,2,3,4)
+                GROUP BY pd.ward_id
+            ) tgt ON tgt.ward_id = CAST(u.Ward_No AS VARCHAR(50))
             WHERE u.IsActive = 1
             ORDER BY Collected DESC";
 
@@ -250,7 +234,7 @@ public class AdminDashboardHandler : IHttpHandler
                     { "staffId",   r["StaffId"].ToString()                                           },
                     { "loginId",   r["LoginId"].ToString()                                           },
                     { "fullName",  r["FullName"].ToString()                                          },
-                    { "wardNo",    r["Ward_No"] == DBNull.Value ? 0 : Convert.ToInt32(r["Ward_No"])  },
+                    { "wardNo",    r["Ward_No"] == DBNull.Value ? "" : r["Ward_No"].ToString()       },
                     { "circle",    r["Circle"]  == DBNull.Value ? "" : r["Circle"].ToString()        },
                     { "status",    isActive ? "Active" : "Inactive"                                  },
                     { "visited",   Convert.ToInt32(r["Citizens_Visited"])                            },
@@ -262,9 +246,6 @@ public class AdminDashboardHandler : IHttpHandler
         return list;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // CITIZENS
-    // ─────────────────────────────────────────────────────────────────
     private void HandleCitizens(HttpContext context, string connStr)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -278,26 +259,33 @@ public class AdminDashboardHandler : IHttpHandler
     {
         string query = @"
             SELECT TOP 200
-                d.PID, d.Owner_Name, d.Guardian_Name, d.Mobile_No,
-                d.Address, d.Ward_No, d.Circle,
-                d.Total_Dues, d.Payment_Status, d.Card_Status,
-                q.Status AS QR_Status, q.QRId, q.QRToken
-            FROM All_Demand d
-            LEFT JOIN QRMaster q ON q.PropertyId = d.PID AND q.Status='ACTIVATED'
-            ORDER BY ISNULL(q.ActivatedDate, '1900-01-01') DESC, d.PID DESC";
+                pd.pid AS PID, 
+                own.owner_name AS Owner_Name, 
+                own.guardian_name AS Guardian_Name, 
+                pd.mobile_no AS Mobile_No,
+                pd.address AS Address, 
+                pd.ward_id AS Ward_No, 
+                '' AS Circle,
+                pd.assessment_year, 
+                q.Status AS QR_Status, q.QRId, q.QRToken,
+                ISNULL((
+                    SELECT SUM(CASE WHEN y.paid_status = 0 THEN y.total_tax ELSE 0 END)
+                    FROM tbl_yearly_tax_assessment y
+                    WHERE y.property_id = pd.id
+                ), 0) AS Fast_Dues
+            FROM tbl_property_detail pd
+            LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id
+            LEFT JOIN QRMaster q ON q.PropertyId = pd.pid AND q.Status='ACTIVATED'
+            WHERE pd.status IN (1,2,3,4)
+            ORDER BY ISNULL(q.ActivatedDate, '1900-01-01') DESC, pd.pid DESC";
 
-        var list = new List<Dictionary<string, object>>();
+        var tempRecords = new List<Dictionary<string, object>>();
         using (SqlCommand cmd = new SqlCommand(query, conn))
         using (SqlDataReader r = cmd.ExecuteReader())
         {
             while (r.Read())
             {
-                string qrStatus   = r["QR_Status"]   == DBNull.Value ? "Not Assigned" : r["QR_Status"].ToString();
-                string cardStatus = r["Card_Status"]  == DBNull.Value ? "" : r["Card_Status"].ToString();
-                if (string.IsNullOrEmpty(qrStatus) || qrStatus == "Not Assigned")
-                    qrStatus = string.IsNullOrEmpty(cardStatus) ? "Not Assigned" : cardStatus;
-
-                list.Add(new Dictionary<string, object>
+                var record = new Dictionary<string, object>
                 {
                     { "pid",           r["PID"].ToString()                                                        },
                     { "ownerName",     r["Owner_Name"].ToString()                                                 },
@@ -306,20 +294,29 @@ public class AdminDashboardHandler : IHttpHandler
                     { "address",       r["Address"]        == DBNull.Value ? "" : r["Address"].ToString()         },
                     { "wardNo",        r["Ward_No"]        == DBNull.Value ? "" : r["Ward_No"].ToString()         },
                     { "circle",        r["Circle"]         == DBNull.Value ? "" : r["Circle"].ToString()          },
-                    { "totalDues",     r["Total_Dues"]     == DBNull.Value ? 0  : Convert.ToDecimal(r["Total_Dues"]) },
-                    { "paymentStatus", r["Payment_Status"] == DBNull.Value ? "Pending" : r["Payment_Status"].ToString() },
-                    { "qrStatus",      qrStatus                                                                   },
-                    { "qrId",          r["QRId"]    == DBNull.Value ? "" : r["QRId"].ToString()                   },
-                    { "qrToken",       r["QRToken"] == DBNull.Value ? "" : r["QRToken"].ToString()                },
-                });
+                    { "qrStatus",      r["QR_Status"]      == DBNull.Value ? "Not Assigned" : r["QR_Status"].ToString() },
+                    { "qrId",          r["QRId"]           == DBNull.Value ? "" : r["QRId"].ToString()            },
+                    { "qrToken",       r["QRToken"]        == DBNull.Value ? "" : r["QRToken"].ToString()         },
+                    { "fastDues",      r["Fast_Dues"]      == DBNull.Value ? 0m : Convert.ToDecimal(r["Fast_Dues"])  },
+                };
+                tempRecords.Add(record);
             }
         }
+
+        var list = new List<Dictionary<string, object>>();
+
+        foreach (var rec in tempRecords)
+        {
+            decimal totalDues = (decimal)rec["fastDues"];
+
+            rec.Add("totalDues", totalDues);
+            rec.Add("paymentStatus", (totalDues > 0) ? "Outstanding" : "Paid");
+            list.Add(rec);
+        }
+
         return list;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // REVENUE
-    // ─────────────────────────────────────────────────────────────────
     private void HandleRevenue(HttpContext context, string connStr, string period, DateTime date)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -331,18 +328,18 @@ public class AdminDashboardHandler : IHttpHandler
 
     private Dictionary<string, object> GetRevenue(SqlConnection conn, string period, DateTime date)
     {
-        // Ward-level breakdown
         string wardQuery = @"
             SELECT
-                d.Ward_No,
-                MAX(d.Circle) AS Circle,
-                COUNT(d.PID) AS Properties,
-                ISNULL(SUM(CASE WHEN d.Payment_Status='Paid' THEN CAST(d.Total_Dues AS DECIMAL(18,2)) ELSE 0 END),0) AS Collected,
-                ISNULL(SUM(CAST(d.Total_Dues AS DECIMAL(18,2))),0) AS Target
-            FROM All_Demand d
-            WHERE d.Ward_No IS NOT NULL AND d.Ward_No > 0
-            GROUP BY d.Ward_No
-            ORDER BY d.Ward_No";
+                pd.ward_id AS Ward_No,
+                '' AS Circle,
+                COUNT(DISTINCT pd.pid) AS Properties,
+                ISNULL(SUM(CASE WHEN y.paid_status = 1 THEN CAST(y.total_tax AS DECIMAL(18,2)) ELSE 0 END),0) AS Collected,
+                ISNULL(SUM(CASE WHEN y.paid_status = 0 THEN CAST(y.total_tax AS DECIMAL(18,2)) ELSE 0 END),0) AS Target
+            FROM tbl_property_detail pd
+            LEFT JOIN tbl_yearly_tax_assessment y ON y.property_id = pd.id
+            WHERE pd.ward_id IS NOT NULL AND pd.ward_id <> '' AND pd.ward_id <> '0' AND pd.status IN (1,2,3,4)
+            GROUP BY pd.ward_id
+            ORDER BY pd.ward_id";
 
         var wardBreakdown = new List<Dictionary<string, object>>();
         using (SqlCommand cmd = new SqlCommand(wardQuery, conn))
@@ -361,7 +358,6 @@ public class AdminDashboardHandler : IHttpHandler
             }
         }
 
-        // Time-series trend (activation counts by period)
         string trendQuery;
         if (period == "day")
         {
@@ -402,10 +398,10 @@ public class AdminDashboardHandler : IHttpHandler
             }
         }
 
-        decimal todayRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid' AND CAST(ISNULL(Last_Scanned,GETDATE()) AS DATE)=CAST(GETDATE() AS DATE)");
-        decimal monthRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid' AND MONTH(ISNULL(Last_Scanned,GETDATE()))=MONTH(GETDATE()) AND YEAR(ISNULL(Last_Scanned,GETDATE()))=YEAR(GETDATE())");
-        decimal yearRevenue  = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid' AND YEAR(ISNULL(Last_Scanned,GETDATE()))=YEAR(GETDATE())");
-        decimal totalRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(Total_Dues AS DECIMAL(18,2))),0) FROM All_Demand WHERE Payment_Status='Paid'");
+        decimal todayRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4) AND CAST(ISNULL(pd.last_payment_date,GETDATE()) AS DATE)=CAST(GETDATE() AS DATE)");
+        decimal monthRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4) AND MONTH(ISNULL(pd.last_payment_date,GETDATE()))=MONTH(GETDATE()) AND YEAR(ISNULL(pd.last_payment_date,GETDATE()))=YEAR(GETDATE())");
+        decimal yearRevenue  = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4) AND YEAR(ISNULL(pd.last_payment_date,GETDATE()))=YEAR(GETDATE())");
+        decimal totalRevenue = ExecScalar<decimal>(conn, @"SELECT ISNULL(SUM(CAST(y.total_tax AS DECIMAL(18,2))),0) FROM tbl_yearly_tax_assessment y JOIN tbl_property_detail pd ON pd.id = y.property_id WHERE y.paid_status = 1 AND pd.status IN (1,2,3,4)");
 
         return new Dictionary<string, object>
         {
@@ -419,9 +415,6 @@ public class AdminDashboardHandler : IHttpHandler
         };
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // CARD STATUS BREAKDOWN
-    // ─────────────────────────────────────────────────────────────────
     private void HandleCardStatus(HttpContext context, string connStr)
     {
         using (SqlConnection conn = new SqlConnection(connStr))
@@ -464,9 +457,6 @@ public class AdminDashboardHandler : IHttpHandler
         };
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────────────────────────────
     private T ExecScalar<T>(SqlConnection conn, string sql)
     {
         using (SqlCommand cmd = new SqlCommand(sql, conn))

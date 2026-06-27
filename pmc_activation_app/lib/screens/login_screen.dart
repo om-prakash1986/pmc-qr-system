@@ -287,7 +287,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Citizen Portal Redirect Button
                           OutlinedButton(
                             onPressed: () {
-                              Navigator.pushNamed(context, '/citizen_portal');
+                              final routeArgs = ModalRoute.of(context)?.settings.arguments;
+                              Navigator.pushNamed(context, '/citizen_portal', arguments: routeArgs);
                             },
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(
@@ -300,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             child: Text(
-                              '🌐 ACCESS CITIZEN PORTAL DEMO',
+                              '🌐 ACCESS CITIZEN PORTAL',
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -310,35 +311,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Toggle Mode Info
-                  GestureDetector(
-                    onDoubleTap: () {
-                      apiService.setSimulated(!apiService.isSimulated);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            apiService.isSimulated
-                                ? 'Switched to Simulated Database Mode'
-                                : 'Switched to Live API Database Mode',
-                          ),
-                          backgroundColor: PmcTheme.secondaryOrange,
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      apiService.isSimulated
-                          ? '⚙️ Simulated Mode Active (Double-tap to change)'
-                          : '🔌 Live Server Mode Active: ${apiService.baseUrl}',
-                      style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.5),
-                      ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],

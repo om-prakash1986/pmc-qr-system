@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
-          Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <!-- ══════════════════════════════════════════════════════════
        PMC Smart QR Card System — Backend API Project
        ASP.NET Web Application (.NET Framework 4.7.2)
        Open PMC_QR_Card_System.sln in Visual Studio 2019/2022
        ══════════════════════════════════════════════════════════ -->
-
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform       Condition=" '$(Platform)'       == '' ">AnyCPU</Platform>
-    <ProductVersion></ProductVersion>
+    <Platform Condition=" '$(Platform)'       == '' ">AnyCPU</Platform>
+    <ProductVersion>
+    </ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{8F4A7B2D-C1E3-4F5A-B890-D3E7F6A12C45}</ProjectGuid>
     <!-- Web Application Project type GUIDs -->
@@ -29,10 +26,11 @@
     <IISExpressWindowsAuthentication />
     <IISExpressUseClassicPipelineMode />
     <Use64BitIISExpress />
-    <NuGetPackageImportStamp></NuGetPackageImportStamp>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
     <MvcBuildViews>false</MvcBuildViews>
+    <UseGlobalApplicationHostFile />
   </PropertyGroup>
-
   <!-- Debug configuration -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -43,7 +41,6 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-
   <!-- Release configuration -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -54,7 +51,6 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-
   <!-- ══ REFERENCES ═══════════════════════════════════════════ -->
   <ItemGroup>
     <Reference Include="System" />
@@ -73,94 +69,92 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>libs\Newtonsoft.Json\lib\net40\Newtonsoft.Json.dll</HintPath>
+    </Reference>
   </ItemGroup>
-
   <!-- ══ PROPERTIES ══════════════════════════════════════════ -->
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-
-  <!-- ══ HANDLER FILES (.ashx + .ashx.cs code-behinds) ═══════ -->
-  <ItemGroup>
-
+    <Compile Include="..\..\App_Code\BL\demandbysms.cs" />
+    <Compile Include="..\..\App_Code\BL\TaxCalculationController.cs" />
+    <Compile Include="..\..\App_Code\BL\ARVRateMasterController.cs" />
+    <Compile Include="..\..\App_Code\BL\TaxRateMasterControllers.cs" />
+    <Compile Include="..\..\App_Code\BL\UsageTypeMasterControllers.cs" />
+    <Compile Include="..\..\App_Code\BL\ARVRateDetailsController.cs" />
+    <Compile Include="..\..\App_Code\BL\VaccantLandTaxController.cs" />
+    <Compile Include="..\..\App_Code\BL\SearchDataController.cs" />
+    <Compile Include="..\..\App_Code\BL\WasteRateChartController.cs" />
+    <Compile Include="..\..\App_Code\BL\OccupancyTypeDetailControllers.cs" />
+    <Compile Include="..\..\App_Code\BL\MobAppRequestController.cs" />
+    <Compile Include="..\..\App_Code\BL\MobAppPaymentController.cs" />
+    <Compile Include="..\..\App_Code\BL\MobAppResponseController.cs" />
+    <Compile Include="..\..\App_Code\BL\YearlyTaxAssessmentTmpController.cs" />
+    <Compile Include="..\..\App_Code\BL\PropertyDetailTmpController.cs" />
+    <!-- DAL — Data Access Layer (required by all BL controllers) -->
+    <Compile Include="..\..\App_Code\DL\DBA.cs" />
+    <!-- Helper classes referenced by BL -->
+    <Compile Include="..\..\App_Code\new_single_sms.cs" />
+    <Compile Include="..\..\App_Code\Common\encryptdecrypt.cs" />
     <!-- Admin Dashboard Handler -->
     <Content Include="AdminDashboardHandler.ashx">
       <DependentUpon>AdminDashboardHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="AdminDashboardHandler.ashx.cs" />
-
     <!-- Login Handler -->
     <Content Include="LoginHandler.ashx">
       <DependentUpon>LoginHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="LoginHandler.ashx.cs" />
-
     <!-- Activate Card Handler -->
     <Content Include="ActivateCardHandler.ashx">
       <DependentUpon>ActivateCardHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="ActivateCardHandler.ashx.cs" />
-
     <!-- Card Lookup Handler -->
     <Content Include="CardLookupHandler.ashx">
       <DependentUpon>CardLookupHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="CardLookupHandler.ashx.cs" />
-
     <!-- Property Lookup Handler -->
     <Content Include="PropertyLookupHandler.ashx">
       <DependentUpon>PropertyLookupHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="PropertyLookupHandler.ashx.cs" />
-
     <!-- Citizen Portal Handler -->
     <Content Include="CitizenPortal.ashx">
       <DependentUpon>CitizenPortal.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="CitizenPortal.ashx.cs" Condition="Exists('CitizenPortal.ashx.cs')" />
-
-    <!-- Tax Collector Property Details Handler -->
-    <Content Include="TaxCollectorPropertyDetailsHandler.ashx">
-      <DependentUpon>TaxCollectorPropertyDetailsHandler.ashx.cs</DependentUpon>
+    <!-- Property Outstanding Handler -->
+    <Content Include="PropertyOutstandingHandler.ashx">
+      <DependentUpon>PropertyOutstandingHandler.ashx.cs</DependentUpon>
     </Content>
-    <Compile Include="TaxCollectorPropertyDetailsHandler.ashx.cs" />
-
+    <Compile Include="PropertyOutstandingHandler.ashx.cs" />
     <!-- Process Payment Handler -->
     <Content Include="ProcessPaymentHandler.ashx">
       <DependentUpon>ProcessPaymentHandler.ashx.cs</DependentUpon>
     </Content>
     <Compile Include="ProcessPaymentHandler.ashx.cs" />
-
+    <!-- Tax Collector Property Details Handler -->
+    <Content Include="TaxCollectorPropertyDetailsHandler.ashx">
+      <DependentUpon>TaxCollectorPropertyDetailsHandler.ashx.cs</DependentUpon>
+    </Content>
+    <Compile Include="TaxCollectorPropertyDetailsHandler.ashx.cs" />
   </ItemGroup>
-
-  <!-- ══ WEB CONFIG ═══════════════════════════════════════════ -->
+  <ItemGroup>
+    <Content Include="admin_dashboard\\index.html" />
+    <Content Include="admin_dashboard\\citizen_portal.html" />
+  </ItemGroup>
   <ItemGroup>
     <Content Include="web.config" />
+    <None Include="web.Debug.config">
+      <DependentUpon>web.config</DependentUpon>
+    </None>
+    <None Include="web.Release.config">
+      <DependentUpon>web.config</DependentUpon>
+    </None>
   </ItemGroup>
-
-  <!-- ══ SQL SCRIPTS (content only, not compiled) ════════════ -->
-  <ItemGroup>
-    <None Include="..\database_scripts\01_create_schema.sql" />
-    <None Include="..\database_scripts\insert_taxcollector.sql" />
-  </ItemGroup>
-
-  <!-- ══ ADMIN DASHBOARD HTML ════════════════════════════════ -->
-  <ItemGroup>
-    <Content Include="admin_dashboard\index.html" />
-    <Content Include="admin_dashboard\citizen_portal.html" />
-  </ItemGroup>
-
-  <!-- ══ MSBuild TARGETS ══════════════════════════════════════ -->
-  <PropertyGroup>
-    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
-    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
-  </PropertyGroup>
-
-  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets"
-          Condition="'$(VSToolsPath)' != '' And Exists('$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets')" />
-
-  <!-- IIS Express settings -->
   <ProjectExtensions>
     <VisualStudio>
       <FlavorProperties GUID="{349C5851-65DF-11DA-9384-00065B846F21}">
@@ -179,5 +173,6 @@
       </FlavorProperties>
     </VisualStudio>
   </ProjectExtensions>
-
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != ''" />
 </Project>

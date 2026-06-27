@@ -6,7 +6,7 @@ using System.Web.Script.Serialization;
 
 /// <summary>
 /// PropertyLookupHandler.ashx.cs
-/// Looks up a citizen property by PID from All_Demand.
+/// Looks up a citizen property by PID from tbl_property_detail and related tables.
 /// GET: /PropertyLookupHandler.ashx?pid=&lt;PID&gt;
 /// </summary>
 public class PropertyLookupHandler : IHttpHandler
@@ -29,25 +29,20 @@ public class PropertyLookupHandler : IHttpHandler
             {
                 string query = @"
                     SELECT TOP 1 
-                        pd.pid AS PID, 
-                        own.owner_name AS Owner_Name, 
-                        own.guardian_name AS Guardian_Name, 
-                        own.mobile_no AS Mobile_No, 
-                        pd.address AS Address,
-                        pd.last_payment_amount,
-                        pd.last_payment_date,
-                        pd.assessment_year,
-                        wm.ward_no,
-                        cm.circle_name,
-                        rm.rev_circle,
-                        ad.PID, ad.Owner_Name, ad.Guardian_Name, ad.Mobile_No, ad.Address,
-                        ad.Total_Dues, ad.Current_Dues, ad.Payment_Status, ad.Circle, ad.Ward_No,
-                        pd.application_no, pd.plot_area, pd.constructed_area,
-                        stm.street_type, pd.id as property_pk
-                    FROM All_Demand ad
-                    LEFT JOIN tbl_property_detail pd ON CAST(ad.PID AS VARCHAR(50)) = CAST(pd.pid AS VARCHAR(50)) AND pd.status IN (1,2,3,4)
-                    LEFT JOIN tbl_street_type_master stm ON pd.street_type_id = stm.id
-                    WHERE ad.PID = @PID";
+                        pd.PID,
+                        own.owner_name AS Owner_Name,
+                        own.guardian_name AS Guardian_Name,
+                        own.mobile_no AS Mobile_No,
+                        pd.address,
+                        pd.application_no,
+                        pd.plot_area,
+                        pd.constructed_area,
+                        stm.street_type,
+                        pd.id as property_pk 
+                    FROM tbl_property_detail pd 
+                    LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id 
+                    LEFT JOIN tbl_street_type_master stm ON pd.street_type_id = stm.id 
+                    WHERE pd.PID = @PID AND pd.status IN (1,2,3,4)";
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
@@ -68,11 +63,7 @@ public class PropertyLookupHandler : IHttpHandler
                             details.Add("guardianName", sdr["Guardian_Name"] == DBNull.Value ? "" : sdr["Guardian_Name"].ToString());
                             details.Add("mobileNo", sdr["Mobile_No"] == DBNull.Value ? "" : sdr["Mobile_No"].ToString());
                             details.Add("address", sdr["Address"] == DBNull.Value ? "" : sdr["Address"].ToString());
-                            details.Add("totalDues", sdr["Total_Dues"] == DBNull.Value ? "0" : sdr["Total_Dues"].ToString());
-                            details.Add("currentAmount", sdr["Current_Dues"] == DBNull.Value ? "0" : sdr["Current_Dues"].ToString());
-                            details.Add("paymentStatus", sdr["Payment_Status"] == DBNull.Value ? "Pending" : sdr["Payment_Status"].ToString());
-                            details.Add("circle", sdr["Circle"] == DBNull.Value ? "" : sdr["Circle"].ToString());
-                            details.Add("wardNo", sdr["Ward_No"] == DBNull.Value ? "" : sdr["Ward_No"].ToString());
+
                             
                             // Extended fields
                             details.Add("sasNo", sdr["application_no"] == DBNull.Value ? "" : sdr["application_no"].ToString());

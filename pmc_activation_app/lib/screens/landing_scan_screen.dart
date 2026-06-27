@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 
@@ -43,11 +44,7 @@ class _LandingScanScreenState extends State<LandingScanScreen>
   void _handleScanResult(String scannedValue) {
     if (_isProcessing) return;
 
-    // Detect if the value is a numeric PID or an alphanumeric Token/URL
-    final isNumeric = double.tryParse(scannedValue) != null;
-    final Map<String, String> payload = isNumeric 
-        ? {'pid': scannedValue} 
-        : {'token': scannedValue};
+    final Map<String, String> payload = ApiService.extractPayload(scannedValue);
 
     // Immediately route to Login Screen with the payload
     Navigator.pushNamed(context, '/login', arguments: payload);
@@ -57,15 +54,7 @@ class _LandingScanScreenState extends State<LandingScanScreen>
   Widget build(BuildContext context) {
     final apiService = Provider.of<ApiService>(context);
 
-    // List of mock cards available for quick click testing in simulated mode
-    final testCards = [
-      {
-        'label': 'Activated Card (Testing Demo)',
-        'token': '5A9F9999-BB99-99AA-AA99-AA9999999999',
-        'url': 'https://pmc.bihar.gov.in/qr/5A9F9999-BB99-99AA-AA99-AA9999999999',
-        'qrid': 'PMC/IND/DQR/00004567',
-      },
-    ];
+
 
     return Scaffold(
       backgroundColor: PmcTheme.backgroundLight,
@@ -112,20 +101,31 @@ class _LandingScanScreenState extends State<LandingScanScreen>
                   ),
                   child: Stack(
                     children: [
+                      // Real Camera Scanner
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: MobileScanner(
+                          controller: MobileScannerController(
+                            detectionSpeed: DetectionSpeed.noDuplicates,
+                            facing: CameraFacing.back,
+                          ),
+                          onDetect: (capture) {
+                            if (_isProcessing) return;
+                            final List<Barcode> barcodes = capture.barcodes;
+                            if (barcodes.isNotEmpty) {
+                              final barcode = barcodes.first;
+                              if (barcode.rawValue != null) {
+                                _handleScanResult(barcode.rawValue!);
+                              }
+                            }
+                          },
+                        ),
+                      ),
                       // Viewfinder border indicators (corners)
                       _buildCornerBorder(top: 10, left: 10, angle: 0),
                       _buildCornerBorder(top: 10, right: 10, angle: 1.57),
                       _buildCornerBorder(bottom: 10, left: 10, angle: 4.71),
                       _buildCornerBorder(bottom: 10, right: 10, angle: 3.14),
-
-                      // QR Code placeholder icon in background
-                      Center(
-                        child: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          size: 120,
-                          color: Colors.grey.withOpacity(0.3),
-                        ),
-                      ),
 
                       // Laser scanner line
                       AnimatedBuilder(
@@ -247,39 +247,7 @@ class _LandingScanScreenState extends State<LandingScanScreen>
               ),
               const SizedBox(height: 10),
 
-              // 5. Simulated QR Code Quick selector
-              if (apiService.isSimulated) ...[
-                Text(
-                  'Simulator Quick Scan:',
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: PmcTheme.textLight,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ...testCards.map((card) {
-                  return Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.qr_code_rounded, color: PmcTheme.primaryBlue),
-                      title: Text(
-                        card['label']!,
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w600,
-                          color: PmcTheme.textDark,
-                        ),
-                      ),
-                      trailing: const Icon(Icons.tap_and_play_rounded, color: PmcTheme.secondaryOrange),
-                      onTap: () => _handleScanResult(card['url']!),
-                    ),
-                  );
-                }).toList(),
-              ],
+
             ],
           ),
         ),

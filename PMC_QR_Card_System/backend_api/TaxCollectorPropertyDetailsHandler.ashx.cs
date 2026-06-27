@@ -83,11 +83,45 @@ public class TaxCollectorPropertyDetailsHandler : IHttpHandler
                     using (SqlDataReader sdr = cmd.ExecuteReader())
                     {
                         var results = new List<Dictionary<string, object>>();
+                        var duesCache = new Dictionary<string, string>();
                         while (sdr.Read())
                         {
+                            string pidStr = sdr["pid"] == DBNull.Value ? "" : sdr["pid"].ToString();
+                            string totalDuesStr = "0";
+                            if (!string.IsNullOrEmpty(pidStr))
+                            {
+                                if (duesCache.ContainsKey(pidStr))
+                                {
+                                    totalDuesStr = duesCache[pidStr];
+                                }
+                                else
+                                {
+                                    decimal dynamicDues = 0;
+                                    try
+                                    {
+                                        PMC.demandbysms dbs = new PMC.demandbysms();
+                                        dynamicDues = dbs.getDemandForMutation(pidStr);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        dynamicDues = 0;
+                                        totalDuesStr = "ERR: " + ex.Message;
+                                    }
+                                    if (totalDuesStr != "0" && totalDuesStr.StartsWith("ERR:"))
+                                    {
+                                        duesCache[pidStr] = totalDuesStr;
+                                    }
+                                    else
+                                    {
+                                        totalDuesStr = (dynamicDues > 0) ? Math.Round(dynamicDues, 0).ToString() : "0";
+                                        duesCache[pidStr] = totalDuesStr;
+                                    }
+                                }
+                            }
+
                             results.Add(new Dictionary<string, object>
                             {
-                                { "pid", sdr["pid"] == DBNull.Value ? "" : sdr["pid"].ToString() },
+                                { "pid", pidStr },
                                 { "application_no", sdr["application_no"] == DBNull.Value ? "" : sdr["application_no"].ToString() },
                                 { "owner_name", sdr["owner_name"] == DBNull.Value ? "" : sdr["owner_name"].ToString() },
                                 { "guardian_name", sdr["guardian_name"] == DBNull.Value ? "" : sdr["guardian_name"].ToString() },
@@ -105,7 +139,8 @@ public class TaxCollectorPropertyDetailsHandler : IHttpHandler
                                 { "mobile_no", sdr["mobile_no"] == DBNull.Value ? "" : sdr["mobile_no"].ToString() },
                                 { "revenue_circle_no", sdr["rev_circle"] == DBNull.Value ? "" : sdr["rev_circle"].ToString() },
                                 { "circle", sdr["circle_name"] == DBNull.Value ? "" : sdr["circle_name"].ToString() },
-                                { "ward", sdr["ward_no"] == DBNull.Value ? "" : sdr["ward_no"].ToString() }
+                                { "ward", sdr["ward_no"] == DBNull.Value ? "" : sdr["ward_no"].ToString() },
+                                { "total_dues", totalDuesStr }
                             });
                         }
 

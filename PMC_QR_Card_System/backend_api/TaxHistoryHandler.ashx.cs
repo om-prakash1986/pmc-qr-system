@@ -39,12 +39,25 @@ public class TaxHistoryHandler : IHttpHandler
             string connStr = System.Configuration.ConfigurationManager.ConnectionStrings["PTax"].ConnectionString;
             using (SqlConnection conn = new SqlConnection(connStr))
             {
+                conn.Open();
+                
+                // Stored procedure expects primary key `id` (bigint) from tbl_property_detail, NOT the user-facing string `pid`
+                long resolvedPropertyId = propertyId; // fallback
+                string lookupSql = "SELECT TOP 1 id FROM tbl_property_detail WHERE pid = @PID AND status IN (1,2,3,4)";
+                using (SqlCommand lookupCmd = new SqlCommand(lookupSql, conn))
+                {
+                    lookupCmd.Parameters.AddWithValue("@PID", pidStr);
+                    object val = lookupCmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value)
+                    {
+                        resolvedPropertyId = Convert.ToInt64(val);
+                    }
+                }
+
                 using (SqlCommand cmd = new SqlCommand("sp_temp_yearly_tax_test", conn))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@property_id", propertyId);
-
-                    conn.Open();
+                    cmd.Parameters.AddWithValue("@property_id", resolvedPropertyId);
                     using (SqlDataReader sdr = cmd.ExecuteReader())
                     {
                         var results = new List<Dictionary<string, object>>();

@@ -14,9 +14,9 @@ void main() {
       ),
     );
 
-    // Verify that the login screen is loaded by checking for standard titles
-    expect(find.text('Staff Login'), findsOneWidget);
-    expect(find.text('SECURE LOGIN'), findsOneWidget);
-    expect(find.text('PATNA NAGAR NIGAM'), findsOneWidget);
+    // Verify that the landing scan screen is loaded by checking for standard titles
+    expect(find.text('Tax Collector QR Scanner'), findsOneWidget);
+    expect(find.text('Please scan the PVC QR Code installed at the property.'), findsOneWidget);
+    expect(find.text('Manual PID/Token Entry'), findsOneWidget);
   });
 }

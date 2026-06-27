@@ -1,0 +1,83 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Data.SqlClient;
+using System.Data;
+using System.Configuration;
+using System.Web.UI.WebControls;
+using System.Text.RegularExpressions;
+
+
+public class ConnectionClass
+    {
+        public static SqlConnection CreateCon()
+        {
+            string connectionString = ConfigurationManager.ConnectionStrings["DBCS"].ConnectionString;
+            SqlConnection con = new SqlConnection(connectionString);
+            con.Open();
+            return con;
+        }
+
+        public object GetId(string query)
+        {
+            object id = null;
+            using (SqlCommand cmd = new SqlCommand(query, ConnectionClass.CreateCon()))
+            {
+                id = cmd.ExecuteScalar();
+            }
+            return id;
+        }
+
+        public DataTable GetData(string query)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                using (SqlDataAdapter adp = new SqlDataAdapter(query, CreateCon()))
+                {
+                    adp.Fill(dt);
+                }
+            }
+            catch (Exception ex)
+            {
+
+            }
+            return dt;
+        }
+
+        public void BindDropDown(DropDownList ddl, string query, string displayValue, string idvalue, string message)
+        {
+            using (SqlCommand cmd2 = new SqlCommand(query, ConnectionClass.CreateCon()))
+            {
+                using (SqlDataReader sdr = cmd2.ExecuteReader())
+                {
+                    while (sdr.Read())
+                    {
+                        ListItem Item1 = new ListItem();
+                        Item1.Text = sdr[displayValue].ToString();
+                        Item1.Value = sdr[idvalue].ToString();
+                        ddl.Items.Add(Item1);
+                    }
+                }
+            }
+            ddl.Items.Insert(0, new ListItem(message, "0"));
+        }
+
+        public void BindDropDown(DropDownList ddl, string query, string displayValue, string idvalue)
+        {
+            using (SqlCommand cmd2 = new SqlCommand(query, ConnectionClass.CreateCon()))
+            {
+                using (SqlDataReader sdr = cmd2.ExecuteReader())
+                {
+                    while (sdr.Read())
+                    {
+                        ListItem Item1 = new ListItem();
+                        Item1.Text = sdr[displayValue].ToString();
+                        Item1.Value = sdr[idvalue].ToString();
+                        ddl.Items.Add(Item1);
+                    }
+                }
+            }
+        }
+    }

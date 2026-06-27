@@ -375,25 +375,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
                       ],
                     ),
 
-                    // Quick simulation guide
-                    if (apiService.isSimulated &&
-                        _verifiedProperty == null) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Text(
-                            'Quick Mock PIDs: ',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              color: PmcTheme.textLight,
-                            ),
-                          ),
-                          _buildMockPidChip('1409113', apiService),
-                          const SizedBox(width: 8),
-                          _buildMockPidChip('1185006', apiService),
-                        ],
-                      ),
-                    ],
+
 
                     const SizedBox(height: 20),
 

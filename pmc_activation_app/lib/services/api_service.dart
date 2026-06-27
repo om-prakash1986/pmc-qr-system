@@ -10,17 +10,12 @@ import '../models/tax_history_row.dart';
 import 'package:geolocator/geolocator.dart';
 class ApiService extends ChangeNotifier {
   static const String keyBaseUrl = 'pmc_base_url';
-  static const String keyIsSimulated = 'pmc_is_simulated';
   static const String keyUserSession = 'pmc_user_session';
-  static const String keyLocalQrs = 'pmc_local_qrs';
-  static const String defaultBaseUrl = 'http://localhost:55500';
-
-  bool _isSimulated = false; // Real mode enabled
+  static String get defaultBaseUrl => kIsWeb ? 'http://localhost/backend_api' : 'http://187.127.178.111/backend_api';
   String _baseUrl = defaultBaseUrl; // server root, no /api prefix
   StaffUser? _currentUser;
   bool _isLoading = false;
 
-  bool get isSimulated => _isSimulated;
   String get baseUrl => _baseUrl;
   StaffUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
@@ -31,79 +26,7 @@ class ApiService extends ChangeNotifier {
   List<Map<String, dynamic>> get recentActivations => _recentActivations;
   int get activationCount => _recentActivations.length;
 
-  // In-Memory Database for Simulation Mode
-  final Map<String, Map<String, dynamic>> _simulatedQrs = {
-    'CEF733F3-7416-4FFA-87F4-2D4361DA8791': {
-      'qrId': 'PMC/IND/DQR/00457417',
-      'qrToken': 'CEF733F3-7416-4FFA-87F4-2D4361DA8791',
-      'status': 'UNASSIGNED',
-      'propertyId': '',
-      'createdDate': '2026-06-17 09:34:44',
-      'activatedDate': '',
-      'activatedBy': '',
-      'qrUrl':
-          'https://pmc.bihar.gov.in/qr/CEF733F3-7416-4FFA-87F4-2D4361DA8791',
-    },
-    '4F23CAC1-2D0E-406A-A0DB-54300D5C46EB': {
-      'qrId': 'PMC/IND/DQR/00457418',
-      'qrToken': '4F23CAC1-2D0E-406A-A0DB-54300D5C46EB',
-      'status': 'UNASSIGNED',
-      'propertyId': '',
-      'createdDate': '2026-06-17 09:34:44',
-      'activatedDate': '',
-      'activatedBy': '',
-      'qrUrl':
-          'https://pmc.bihar.gov.in/qr/4F23CAC1-2D0E-406A-A0DB-54300D5C46EB',
-    },
-    'BF388527-E492-4176-AC8E-0042633BADB3': {
-      'qrId': 'PMC/IND/DQR/00457419',
-      'qrToken': 'BF388527-E492-4176-AC8E-0042633BADB3',
-      'status': 'UNASSIGNED',
-      'propertyId': '',
-      'createdDate': '2026-06-17 09:34:44',
-      'activatedDate': '',
-      'activatedBy': '',
-      'qrUrl':
-          'https://pmc.bihar.gov.in/qr/BF388527-E492-4176-AC8E-0042633BADB3',
-    },
-    // Already Activated to test security error
-    '5A9F9999-BB99-99AA-AA99-AA9999999999': {
-      'qrId': 'PMC/IND/DQR/00004567',
-      'qrToken': '5A9F9999-BB99-99AA-AA99-AA9999999999',
-      'status': 'ACTIVATED',
-      'propertyId': '1409113',
-      'createdDate': '2026-06-01 10:00:00',
-      'activatedDate': '2026-06-17 12:00:00',
-      'activatedBy': 'EMP101',
-      'qrUrl':
-          'https://pmc.bihar.gov.in/qr/5A9F9999-BB99-99AA-AA99-AA9999999999',
-    },
-  };
 
-  final Map<String, Map<String, dynamic>> _simulatedProperties = {
-    '1409113': {
-      'pid': '1409113',
-      'ownerName': 'SRI KUMUD VISHAL',
-      'guardianName': 'SRI BALMIKI PRASAD SINGH',
-      'mobileNo': '9431881414',
-      'address': 'SHANTI VIHAR COLONY DIGHA PATNA',
-      'totalDues': '2190617',
-      'paymentStatus': 'Pending',
-      'circle': 'Patliputra Circle',
-      'wardNo': '1',
-    },
-    '1185006': {
-      'pid': '1185006',
-      'ownerName': 'SMT SOBHA DEVI',
-      'guardianName': 'RAM EKBAL PRASAD',
-      'mobileNo': '9199774991',
-      'address': 'ALPANA CINEMA KE PICHHE DIGHA GHAT PATNA',
-      'totalDues': '1902',
-      'paymentStatus': 'Pending',
-      'circle': 'Patliputra Circle',
-      'wardNo': '1',
-    },
-  };
 
   ApiService() {
     _loadSettings();
@@ -113,20 +36,10 @@ class ApiService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _baseUrl = prefs.getString(keyBaseUrl) ?? defaultBaseUrl;
     // Force local testing URL even if an old URL is cached
-    if (_baseUrl.contains('arvixe.com')) {
+    if (_baseUrl.contains('arvixe.com') || _baseUrl.contains('localhost') || _baseUrl.contains(':55500')) {
       _baseUrl = defaultBaseUrl;
       await prefs.setString(keyBaseUrl, defaultBaseUrl); // Overwrite the cached value
     }
-    // Connect to the real backend running locally!
-    _isSimulated = false;
-    await prefs.setBool(keyIsSimulated, false);
-
-    // Load local activation log
-    final activationsJson = prefs.getString('pmc_activations_log') ?? '[]';
-    _recentActivations = List<Map<String, dynamic>>.from(
-      jsonDecode(activationsJson),
-    );
-
     // Load active session
     final sessionJson = prefs.getString(keyUserSession);
     if (sessionJson != null) {
@@ -137,36 +50,10 @@ class ApiService extends ChangeNotifier {
       }
     }
 
-    // Load simulated data edits
-    final localQrsJson = prefs.getString(keyLocalQrs);
-    if (localQrsJson != null) {
-      final localQrs = Map<String, dynamic>.from(jsonDecode(localQrsJson));
-      localQrs.forEach((key, value) {
-        _simulatedQrs[key] = Map<String, dynamic>.from(value);
-      });
-    }
-
     notifyListeners();
   }
 
-  Future<void> setSimulated(bool val) async {
-    _isSimulated = val;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(keyIsSimulated, val);
-    notifyListeners();
-  }
 
-  Future<void> setBaseUrl(String url) async {
-    _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(keyBaseUrl, _baseUrl);
-    notifyListeners();
-  }
-
-  Future<void> _saveSimulatedQrs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(keyLocalQrs, jsonEncode(_simulatedQrs));
-  }
 
   Future<void> _saveActivationsLog() async {
     final prefs = await SharedPreferences.getInstance();
@@ -177,6 +64,15 @@ class ApiService extends ChangeNotifier {
   }
 
   // ── HELPERS ───────────────────────────────────────────────────────────
+  Map<String, String> get _headers {
+    final Map<String, String> h = {'Content-Type': 'application/json'};
+    // Override Host header for mobile testing to bypass IIS Express 400 Bad Request 
+    if (!kIsWeb && _baseUrl.contains(':55500')) {
+      h['Host'] = 'localhost:55500';
+    }
+    return h;
+  }
+
   /// Safely decode JSON — returns null instead of throwing FormatException
   Map<String, dynamic>? _safeJsonDecode(String body) {
     try {
@@ -186,6 +82,13 @@ class ApiService extends ChangeNotifier {
     }
   }
 
+  Future<void> setBaseUrl(String url) async {
+    _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyBaseUrl, _baseUrl);
+    notifyListeners();
+  }
+
   // ── API: STAFF LOGIN ──────────────────────────────────────────────────
 
   Future<bool> login(String username, String password) async {
@@ -193,49 +96,8 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_isSimulated) {
-        await Future.delayed(
-          const Duration(milliseconds: 800),
-        ); // Simulate delay
-        if ((username.trim().toLowerCase() == 'admin' &&
-                password == 'Admin@1234') ||
-            (username.trim().toLowerCase() == 'emp101' &&
-                password == 'password') ||
-            (username.trim().toLowerCase() == 'tax101' &&
-                password == 'taxpass')) {
-          _currentUser = StaffUser(
-            staffId: username.toLowerCase() == 'admin'
-                ? 1
-                : (username.toLowerCase() == 'tax101' ? 102 : 101),
-            loginId: username,
-            fullName: username.toLowerCase() == 'admin'
-                ? 'System Admin'
-                : username.toLowerCase() == 'tax101'
-                ? 'Tax Collector 101'
-                : 'EMP 101 (Field Agent)',
-            role: username.toLowerCase() == 'admin' ? 'ADMIN' : 'FIELD_STAFF',
-            wardNo: 1,
-            circle: 'Patliputra Circle',
-            mobile: '9999999999',
-          );
-
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(
-            keyUserSession,
-            jsonEncode(_currentUser!.toJson()),
-          );
-          _isLoading = false;
-          notifyListeners();
-          return true;
-        } else {
-          _isLoading = false;
-          notifyListeners();
-          throw Exception('Invalid username or password');
-        }
-      } else {
         // Real HTTP Call — send as JSON to match LoginHandler.ashx expectation
-        final forceUrl = defaultBaseUrl; // Bypass any broken SharedPreferences cache
-        final url = Uri.parse('$forceUrl/LoginHandler.ashx');
+        final url = Uri.parse('$_baseUrl/LoginHandler.ashx');
         final payload = {'username': username.trim(), 'password': password};
         print('🔍 Staff login → $url');
         print('🔍 Payload: $payload');
@@ -243,10 +105,10 @@ class ApiService extends ChangeNotifier {
         final response = await http
             .post(
               url,
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers,
               body: jsonEncode(payload),
             )
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 60));
 
         print('🔍 Status: ${response.statusCode}');
         print('🔍 Body: ${response.body}');
@@ -265,9 +127,9 @@ class ApiService extends ChangeNotifier {
         } else {
           _isLoading = false;
           notifyListeners();
-          throw Exception(data?['message'] ?? 'Login failed');
+          final errorMsg = data?['message'] ?? 'Login failed. Code: ${response.statusCode}, Body: ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}';
+          throw Exception(errorMsg);
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -281,14 +143,14 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
     try {
       // Use GET request as the API expects query parameters
-      final uri = Uri.parse('$defaultBaseUrl/CitizenPortal.ashx').replace(
+      final uri = Uri.parse('$_baseUrl/CitizenPortal.ashx').replace(
         queryParameters: {
           'action': 'tax_login',
           'username': username,
           'password': password,
         },
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 20));
+      final response = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 60));
       // Debug logs
       print('🔍 Tax login request to: $uri');
       print('🔍 Status code: ${response.statusCode}');
@@ -313,57 +175,84 @@ class ApiService extends ChangeNotifier {
     }
   }
 
+  // Helper to extract QR ID and PID from various payload formats
+  static Map<String, String> extractPayload(String scannedValue) {
+    Map<String, String> result = {};
+
+    // 1. Try parsing as JSON
+    try {
+      final decoded = jsonDecode(scannedValue);
+      if (decoded is Map) {
+        if (decoded.containsKey('qr_id')) result['qrId'] = decoded['qr_id'].toString();
+        else if (decoded.containsKey('qrId')) result['qrId'] = decoded['qrId'].toString();
+        
+        if (decoded.containsKey('pid')) result['pid'] = decoded['pid'].toString();
+        else if (decoded.containsKey('property_id')) result['pid'] = decoded['property_id'].toString();
+        
+        if (result.isNotEmpty) return result;
+      }
+    } catch (_) {}
+
+    // 2. Try parsing as URL
+    if (scannedValue.startsWith('http://') || scannedValue.startsWith('https://')) {
+      try {
+        final uri = Uri.parse(scannedValue);
+        
+        if (uri.queryParameters.containsKey('qrId')) result['qrId'] = uri.queryParameters['qrId']!;
+        else if (uri.queryParameters.containsKey('token')) result['qrId'] = uri.queryParameters['token']!;
+        else if (uri.queryParameters.containsKey('id')) result['qrId'] = uri.queryParameters['id']!;
+        else if (uri.pathSegments.isNotEmpty) result['qrId'] = uri.pathSegments.last;
+
+        if (uri.queryParameters.containsKey('pid')) result['pid'] = uri.queryParameters['pid']!;
+        else if (uri.queryParameters.containsKey('propertyId')) result['pid'] = uri.queryParameters['propertyId']!;
+
+        return result;
+      } catch (_) {}
+    }
+
+    // 3. Try parsing as comma-separated key-value pairs
+    if (scannedValue.contains(':')) {
+        final parts = scannedValue.split(',');
+        for (var part in parts) {
+            final kv = part.split(':');
+            if (kv.length == 2) {
+                final key = kv[0].trim().toLowerCase();
+                final val = kv[1].trim();
+                if (key == 'qr_id' || key == 'qrid' || key == 'token' || key == 'id') result['qrId'] = val;
+                if (key == 'pid' || key == 'property_id' || key == 'propertyid') result['pid'] = val;
+            }
+        }
+        if (result.isNotEmpty) return result;
+    }
+
+    // 4. Fallback to basic inference
+    final isNumeric = double.tryParse(scannedValue) != null;
+    if (isNumeric) {
+      result['pid'] = scannedValue;
+    } else {
+      result['qrId'] = scannedValue;
+    }
+
+    return result;
+  }
+
   // ── API: LOOKUP QR CARD ────────────────────────────────────────────────
   Future<QrCard> lookupCard(String scannedValue) async {
     _isLoading = true;
     notifyListeners();
 
+    final extractedValue = extractPayload(scannedValue)['qrId'] ?? scannedValue;
+
     try {
-      if (_isSimulated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        String tokenKey = scannedValue.trim();
-        // Parse token if URL was scanned
-        if (tokenKey.startsWith('http')) {
-          try {
-            final uri = Uri.parse(tokenKey);
-            tokenKey = uri.pathSegments.last;
-          } catch (_) {}
-        }
-
-        // Search in local simulation map
-        Map<String, dynamic>? match;
-        if (_simulatedQrs.containsKey(tokenKey)) {
-          match = _simulatedQrs[tokenKey];
-        } else {
-          // Search by QRId
-          for (var item in _simulatedQrs.values) {
-            if (item['qrId'] == scannedValue) {
-              match = item;
-              break;
-            }
-          }
-        }
-
-        _isLoading = false;
-        notifyListeners();
-
-        if (match != null) {
-          return QrCard.fromJson(match);
-        } else {
-          throw Exception(
-            'QR card details not found in system. Please verify if this card is registered.',
-          );
-        }
-      } else {
         // Real HTTP Call
         final response = await http
             .get(
               Uri.parse(
-                '$defaultBaseUrl/CardLookupHandler.ashx?value=${Uri.encodeComponent(scannedValue)}',
+                '$_baseUrl/CardLookupHandler.ashx?value=${Uri.encodeComponent(extractedValue)}',
               ),
+              headers: _headers,
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 60));
 
         final data = jsonDecode(response.body);
         _isLoading = false;
@@ -374,7 +263,6 @@ class ApiService extends ChangeNotifier {
         } else {
           throw Exception(data['message'] ?? 'Card not found');
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -388,30 +276,15 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_isSimulated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        final cleanPid = pid.trim();
-        if (_simulatedProperties.containsKey(cleanPid)) {
-          _isLoading = false;
-          notifyListeners();
-          return Property.fromJson(_simulatedProperties[cleanPid]!);
-        } else {
-          _isLoading = false;
-          notifyListeners();
-          throw Exception(
-            'Property ID (PID) not found in system records. Please verify the PID.',
-          );
-        }
-      } else {
         // Real HTTP Call
         final response = await http
             .get(
               Uri.parse(
-                '$defaultBaseUrl/PropertyLookupHandler.ashx?pid=${Uri.encodeComponent(pid)}',
+                '$_baseUrl/PropertyLookupHandler.ashx?pid=${Uri.encodeComponent(pid)}',
               ),
+              headers: _headers,
             )
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 60));
 
         final data = jsonDecode(response.body);
         _isLoading = false;
@@ -422,7 +295,6 @@ class ApiService extends ChangeNotifier {
         } else {
           throw Exception(data['message'] ?? 'Property not found');
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -436,25 +308,13 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_isSimulated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        _isLoading = false;
-        notifyListeners();
-        
-        // Mock data for simulation
-        if (searchQuery == '1409113' || searchQuery == '1234567') {
-          return [
-            PropertyDetailRow(
-              pid: '1409113', applicationNo: 'SAS-1234', ownerName: 'SRI KUMUD VISHAL', guardianName: 'SRI BALMIKI PRASAD SINGH', address: '123 Mock Street', plotArea: '1500', constructedArea: '1200', assessmentYear: '2023', streetType: 'Main Road', floorNo: 'Ground Floor', builtupArea: '1200', useType: 'Residential', usageType: 'Self Occupied', contructionType: 'Pucca', occupancyType: 'Owner', mobileNo: '9999999999', revenueCircleNo: '268', circle: 'Bankipur', ward: '1'
-            )
-          ];
-        } else {
-          throw Exception('Extended details not found for PID.');
-        }
-      } else {
+
         final response = await http
-            .get(Uri.parse('$defaultBaseUrl/TaxCollectorPropertyDetailsHandler.ashx?search=${Uri.encodeComponent(searchQuery)}'))
-            .timeout(const Duration(seconds: 10));
+            .get(
+              Uri.parse('$_baseUrl/TaxCollectorPropertyDetailsHandler.ashx?search=${Uri.encodeComponent(searchQuery)}'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 60));
 
         final data = jsonDecode(response.body);
         _isLoading = false;
@@ -466,7 +326,6 @@ class ApiService extends ChangeNotifier {
         } else {
           throw Exception(data['message'] ?? 'Extended property details not found');
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -480,24 +339,14 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_isSimulated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        _isLoading = false;
-        notifyListeners();
 
-        // Mock data
-        return [
-          TaxHistoryRow(finYear: '2023-2024', propertyId: pid, floorTax: '1208.00', vacantTax: '0.00', totalTax: '1208.00'),
-          TaxHistoryRow(finYear: '2024-2025', propertyId: pid, floorTax: '1208.00', vacantTax: '0.00', totalTax: '1208.00'),
-          TaxHistoryRow(finYear: '2025-2026', propertyId: pid, floorTax: '1208.00', vacantTax: '0.00', totalTax: '1208.00'),
-          TaxHistoryRow(finYear: '2026-2027', propertyId: pid, floorTax: '1208.00', vacantTax: '0.00', totalTax: '1208.00'),
-          TaxHistoryRow(finYear: 'TOTAL', propertyId: pid, floorTax: '', vacantTax: '', totalTax: '4832.00'),
-        ];
-      } else {
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final response = await http
-            .get(Uri.parse('$defaultBaseUrl/TaxHistoryHandler.ashx?pid=${Uri.encodeComponent(pid)}&_t=$timestamp'))
-            .timeout(const Duration(seconds: 10));
+            .get(
+              Uri.parse('$_baseUrl/TaxHistoryHandler.ashx?pid=${Uri.encodeComponent(pid)}&_t=$timestamp'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 60));
 
         final data = jsonDecode(response.body);
         _isLoading = false;
@@ -509,7 +358,6 @@ class ApiService extends ChangeNotifier {
         } else {
           throw Exception(data['message'] ?? 'Tax history not found');
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -525,56 +373,8 @@ class ApiService extends ChangeNotifier {
     try {
       final staffId = _currentUser?.loginId ?? 'UNKNOWN';
 
-      if (_isSimulated) {
-        await Future.delayed(const Duration(seconds: 1));
 
-        // 1. Verify card exists & check status in simulation
-        if (!_simulatedQrs.containsKey(qrToken)) {
-          throw Exception('QR card token not registered.');
-        }
 
-        final card = _simulatedQrs[qrToken]!;
-        if (card['status'] == 'ACTIVATED') {
-          throw Exception(
-            'This QR card is already activated for PID: ${card['propertyId']}',
-          );
-        }
-
-        // 2. Verify PID exists
-        if (!_simulatedProperties.containsKey(pid)) {
-          throw Exception('Property ID (PID) does not exist.');
-        }
-
-        // 3. Mark old active cards for this PID as REPLACED
-        _simulatedQrs.forEach((key, value) {
-          if (value['propertyId'] == pid && value['status'] == 'ACTIVATED') {
-            value['status'] = 'REPLACED';
-            value['activatedDate'] = DateTime.now().toString().substring(0, 19);
-            value['activatedBy'] = staffId;
-          }
-        });
-
-        // 4. Update card details
-        card['status'] = 'ACTIVATED';
-        card['propertyId'] = pid;
-        card['activatedDate'] = DateTime.now().toString().substring(0, 19);
-        card['activatedBy'] = staffId;
-
-        await _saveSimulatedQrs();
-
-        // Log locally
-        final newLog = {
-          'qrId': qrId,
-          'pid': pid,
-          'owner': _simulatedProperties[pid]!['ownerName'],
-          'activatedAt': DateTime.now().toString().substring(0, 19),
-        };
-        _recentActivations.insert(0, newLog);
-        await _saveActivationsLog();
-
-        _isLoading = false;
-        notifyListeners();
-      } else {
         // Provide default fallback dummy coordinates (Patna) for desktop simulators 
         // where native location plugins might fail or permissions might be denied.
         String geoLat = '25.6185';
@@ -602,8 +402,8 @@ class ApiService extends ChangeNotifier {
         // Real HTTP Call
         final response = await http
             .post(
-              Uri.parse('$defaultBaseUrl/ActivateCardHandler.ashx'),
-              headers: {'Content-Type': 'application/json'},
+              Uri.parse('$_baseUrl/ActivateCardHandler.ashx'),
+              headers: _headers,
               body: jsonEncode({
                 'qrid': qrId,
                 'pid': pid,
@@ -613,7 +413,7 @@ class ApiService extends ChangeNotifier {
                 'geo_long': geoLong,
               }),
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 60));
 
         final data = jsonDecode(response.body);
         _isLoading = false;
@@ -632,7 +432,6 @@ class ApiService extends ChangeNotifier {
         } else {
           throw Exception(data['message'] ?? 'Activation failed');
         }
-      }
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -660,13 +459,10 @@ class ApiService extends ChangeNotifier {
   Future<void> processPayment(
       String pid, double amount, String paymentId, {String? ownerName, String? mobileNo}) async {
     try {
-      if (_isSimulated) {
-        await Future.delayed(const Duration(seconds: 1));
-        return;
-      }
+
       final response = await http.post(
-        Uri.parse('$defaultBaseUrl/ProcessPaymentHandler.ashx'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$_baseUrl/ProcessPaymentHandler.ashx'),
+        headers: _headers,
         body: jsonEncode({
           'pid': pid,
           'amount': amount,
@@ -686,6 +482,85 @@ class ApiService extends ChangeNotifier {
       }
     } catch (e) {
       throw Exception('Failed to process payment: $e');
+    }
+  }
+
+  // ── API: CITIZEN PORTAL — SEND OTP ────────────────────────────────────
+  /// Calls CitizenPortal.ashx?action=send_otp on the real backend.
+  /// The backend validates the mobile against DB, generates an OTP,
+  /// stores it in session, and dispatches it via SMS gateway.
+  Future<void> sendOtp({required String token, required String mobile}) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('$_baseUrl/CitizenPortal.ashx?action=send_otp');
+      print('🔍 sendOtp → $url  token=$token  mobile=$mobile');
+
+      final response = await http
+          .post(
+            url,
+            headers: _headers,
+            body: jsonEncode({'token': token, 'mobile': mobile}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      print('🔍 sendOtp status: ${response.statusCode}');
+      print('🔍 sendOtp body:   ${response.body}');
+
+      final data = _safeJsonDecode(response.body);
+      _isLoading = false;
+      notifyListeners();
+
+      if (response.statusCode == 200 && data != null && data['success'] == true) {
+        return; // OTP sent successfully — user will receive it via SMS
+      } else {
+        throw Exception(data?['message'] ?? 'Failed to send OTP. Please try again.');
+      }
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ── API: CITIZEN PORTAL — VERIFY OTP ──────────────────────────────────
+  /// Calls CitizenPortal.ashx?action=verify_otp.
+  /// The C# handler verifies the session OTP, then calls
+  /// PMC.demandbysms.getDemandForMutation(propertyId) and returns property data.
+  Future<Property> verifyOtp({required String token, required String otp}) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('$_baseUrl/CitizenPortal.ashx?action=verify_otp');
+      print('🔍 verifyOtp → $url  token=$token  otp=$otp');
+
+      final response = await http
+          .post(
+            url,
+            headers: _headers,
+            body: jsonEncode({'token': token, 'otp': otp}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      print('🔍 verifyOtp status: ${response.statusCode}');
+      print('🔍 verifyOtp body:   ${response.body}');
+
+      final data = _safeJsonDecode(response.body);
+      _isLoading = false;
+      notifyListeners();
+
+      if (response.statusCode == 200 && data != null && data['success'] == true) {
+        // data['data'] contains property details + totalDues from getDemandForMutation
+        return Property.fromJson(Map<String, dynamic>.from(data['data']));
+      } else {
+        throw Exception(data?['message'] ?? 'OTP verification failed. Please try again.');
+      }
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
     }
   }
 }

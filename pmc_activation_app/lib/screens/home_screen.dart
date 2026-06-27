@@ -42,31 +42,76 @@ class _HomeScreenState extends State<HomeScreen> {
       String? targetPid = queryParams['pid'] ?? queryParams['search'];
       String? token = queryParams['token'] ?? queryParams['qrId'] ?? queryParams['value'];
 
-      if (targetPid != null && targetPid.isNotEmpty) {
-        _searchController.text = targetPid;
-        _searchPropertyDetails(apiService);
-      } else if (token != null && token.isNotEmpty) {
-        setState(() { _isSearching = true; });
-        try {
-          final card = await apiService.lookupCard(token);
-          if (card.propertyId.isNotEmpty) {
-            _searchController.text = card.propertyId;
-            _searchPropertyDetails(apiService);
-          } else {
+      if (apiService.currentUser?.role == 'TAX_COLLECTOR') {
+        // Feature: Auto-Populate PID from QR Code Scan to Tax Collector Dashboard
+        if (targetPid != null && targetPid.isNotEmpty) {
+          _searchController.text = targetPid;
+          _searchPropertyDetails(apiService);
+        } else if (token != null && token.isNotEmpty) {
+          // If no PID in payload, fallback to looking up the token
+          setState(() { _isSearching = true; });
+          try {
+            final card = await apiService.lookupCard(token);
+            if (!mounted) return;
+            if (card.propertyId.isNotEmpty) {
+              _searchController.text = card.propertyId;
+              _searchPropertyDetails(apiService);
+            } else {
+              setState(() { _isSearching = false; });
+            }
+          } catch (e) {
+            if (!mounted) return;
             setState(() {
               _isSearching = false;
-              _errorMessage = 'Scanned QR card is UNASSIGNED. No PID linked.';
+              _errorMessage = e.toString().replaceAll('Exception: ', '');
             });
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Invalid Card'),
+                content: Text(_errorMessage ?? 'Unknown error'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+                ],
+              ),
+            );
           }
-        } catch (e) {
-          setState(() {
-            _isSearching = false;
-            _errorMessage = e.toString().replaceAll('Exception: ', '');
-          });
         }
-      } else if (apiService.currentUser?.role == 'TAX_COLLECTOR') {
-        _searchController.text = '1234567';
-        _searchPropertyDetails(apiService);
+      } else {
+        // Regular FIELD_STAFF logic for unassigned cards
+        if (targetPid != null && targetPid.isNotEmpty) {
+          _searchController.text = targetPid;
+          _searchPropertyDetails(apiService);
+        } else if (token != null && token.isNotEmpty) {
+          setState(() { _isSearching = true; });
+          try {
+            final card = await apiService.lookupCard(token);
+            if (!mounted) return;
+            if (card.propertyId.isNotEmpty) {
+              _searchController.text = card.propertyId;
+              _searchPropertyDetails(apiService);
+            } else {
+              setState(() { _isSearching = false; });
+              Navigator.pushNamed(context, '/activate_form', arguments: card);
+            }
+          } catch (e) {
+            if (!mounted) return;
+            setState(() {
+              _isSearching = false;
+              _errorMessage = e.toString().replaceAll('Exception: ', '');
+            });
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Invalid Card'),
+                content: Text(_errorMessage ?? 'Unknown error'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+                ],
+              ),
+            );
+          }
+        }
       }
     });
   }
@@ -101,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Logout',
             onPressed: () async {
               await apiService.logout();
-              Navigator.pushReplacementNamed(context, '/login');
+              Navigator.pushNamedAndRemoveUntil(context, '/landing_scan', (route) => false);
             },
           ),
         ],
@@ -547,26 +592,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
 
                 // Simulation Mode Switch
-                SwitchListTile(
-                  title: Text(
-                    'Simulation Mode',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      color: PmcTheme.textDark,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Use pre-seeded mock database instead of hitting IIS server',
-                    style: GoogleFonts.outfit(fontSize: 12),
-                  ),
-                  value: apiService.isSimulated,
-                  activeColor: PmcTheme.secondaryOrange,
-                  onChanged: (val) {
-                    apiService.setSimulated(val);
-                  },
-                ),
 
-                const Divider(),
 
                 // Resident Portal Simulator Option
                 ListTile(
@@ -610,7 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
-                    hintText: 'e.g. http://192.168.1.10/api',
+                    hintText: 'e.g. http://187.127.178.111/api',
                     prefixIcon: Icon(Icons.link_rounded),
                   ),
                 ),
@@ -817,6 +843,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildExtendedDetailRow('Owner Name', _searchResults!.first.ownerName),
                   _buildExtendedDetailRow('Guardian Name', _searchResults!.first.guardianName),
                   _buildExtendedDetailRow('Address', _searchResults!.first.address),
+                  _buildExtendedDetailRow('Total Outstanding Dues', '₹ ${_searchResults!.first.totalDues}', isBold: true),
                 ],
               ),
             ),

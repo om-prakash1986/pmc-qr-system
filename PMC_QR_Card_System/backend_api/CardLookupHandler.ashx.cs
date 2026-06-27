@@ -64,6 +64,37 @@ public class CardLookupHandler : IHttpHandler
                                     ? dt.ToString("yyyy-MM-dd HH:mm:ss") : rawActDate;
                             }
 
+                            string maskedMobile = "****";
+                            if (!string.IsNullOrEmpty(rawPropId))
+                            {
+                                try
+                                {
+                                    using (SqlConnection conn2 = new SqlConnection(connStr))
+                                    {
+                                        string qMobile = @"
+                                            SELECT TOP 1 own.mobile_no
+                                            FROM tbl_property_detail pd
+                                            LEFT JOIN tbl_owner_detail own ON pd.id = own.property_id
+                                            WHERE pd.pid = @PID AND pd.status IN (1,2,3,4)";
+                                        using (SqlCommand cmd2 = new SqlCommand(qMobile, conn2))
+                                        {
+                                            cmd2.Parameters.AddWithValue("@PID", rawPropId);
+                                            conn2.Open();
+                                            object mobVal = cmd2.ExecuteScalar();
+                                            if (mobVal != null && mobVal != DBNull.Value)
+                                            {
+                                                string cleanMob = mobVal.ToString().Trim();
+                                                if (cleanMob.Length >= 4)
+                                                {
+                                                    maskedMobile = "****" + cleanMob.Substring(cleanMob.Length - 4);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                catch {}
+                            }
+
                             var cardDetails = new Dictionary<string, object>
                             {
                                 { "qrId",          sdr["QRId"].ToString()                                                },
@@ -74,6 +105,7 @@ public class CardLookupHandler : IHttpHandler
                                 { "activatedDate", formattedActDate                                                      },
                                 { "activatedBy",   rawActBy                                                              },
                                 { "qrUrl",         sdr["QRUrl"].ToString()                                              },
+                                { "maskedMobile",  maskedMobile                                                          },
                             };
                             SendResponse(context, 200, true, "Card found", cardDetails);
                         }

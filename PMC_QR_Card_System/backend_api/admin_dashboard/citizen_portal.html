@@ -604,7 +604,7 @@
                     </svg>
                     <div>
                         <strong>Verification Required:</strong>
-                        <div id="masked-mobile-text">This QR card is linked to a registered mobile ending in: ****1414</div>
+                        <div id="masked-mobile-text">This QR card is linked to a registered mobile ending in: ****</div>
                     </div>
                 </div>
 
@@ -760,85 +760,46 @@
                 </button>
             </div>
 
-            <!-- Demo Mode Configuration Toggle Panel -->
-            <div class="demo-panel">
-                <div style="font-weight: bold; margin-bottom: 4px;">Simulated Client Mode Active</div>
-                <div>
-                    Token: <strong>5A9F9999-BB99-99AA-AA99-AA9999999999</strong><br>
-                    Mock Mobile: <strong>9431881414</strong> <span class="quick-fill" onclick="quickFill()">Auto Fill</span><br>
-                    OTP Override: <strong>123456</strong>
-                </div>
-            </div>
+            <!-- Demo panel removed – test mode no longer needed -->
 
         </div>
     </div>
 
     <script>
-        // Seeded Mock Data for complete client-side simulation
-        const mockQrs = {
-            '5A9F9999-BB99-99AA-AA99-AA9999999999': {
-                qrId: 'PMC/IND/DQR/00004567',
-                status: 'ACTIVATED',
-                propertyId: '1409113',
-            },
-            'CEF733F3-7416-4FFA-87F4-2D4361DA8791': {
-                qrId: 'PMC/IND/DQR/00457417',
-                status: 'UNASSIGNED',
-                propertyId: '',
-            }
-        };
+        // ── State ──────────────────────────────────────────────────────────────
+        // Base URL: this file is served from admin_dashboard/, so API is one level up
+        const API_BASE = '../';   // resolves to backend_api root (CitizenPortal.ashx etc.)
 
-        const mockProperties = {
-            '1409113': {
-                pid: '1409113',
-                ownerName: 'SRI KUMUD VISHAL',
-                guardianName: 'SRI BALMIKI PRASAD SINGH',
-                mobileNo: '9431881414',
-                address: 'SHANTI VIHAR COLONY DIGHA PATNA',
-                totalDues: '21906',
-                paymentStatus: 'Pending',
-                circle: 'Patliputra Circle',
-                wardNo: '1'
-            }
-        };
+        let scanToken = '';
+        let currentDuesAmount = 0;
 
-        // Current page state
-        let scanToken = '5A9F9999-BB99-99AA-AA99-AA9999999999'; 
-        let generatedOtp = '123456';
-        let currentStep = 'login'; // 'scan', 'login', 'dashboard'
-
+        // ── Bootstrap ──────────────────────────────────────────────────────────
         window.onload = function() {
-            // Read query string token if present
             const urlParams = new URLSearchParams(window.location.search);
             const tokenParam = urlParams.get('token') || urlParams.get('value');
             if (tokenParam) {
                 scanToken = tokenParam;
-                document.getElementById('manual-token').value = tokenParam;
+                const mi = document.getElementById('manual-token');
+                if (mi) mi.value = tokenParam;
             }
-
             initFlow();
         };
 
         function initFlow() {
             hideAllAlerts();
-            
             if (!scanToken) {
-                // Step 1: Manual entry
                 showStep('scan');
-                document.getElementById('portal-header-desc').innerText = 'Please scan a valid PMC smart QR plate fixed at your residence or enter your QR Token below.';
+                document.getElementById('portal-header-desc').innerText =
+                    'Please scan a valid PMC smart QR plate or enter your QR Token below.';
             } else {
-                // Step 2: Validate token & load login
                 validateCardToken();
             }
         }
 
         function showStep(stepName) {
-            document.getElementById('step-scan').classList.add('hidden');
-            document.getElementById('step-login').classList.add('hidden');
-            document.getElementById('step-dashboard').classList.add('hidden');
-            
+            ['scan','login','dashboard'].forEach(s =>
+                document.getElementById('step-' + s).classList.add('hidden'));
             document.getElementById('step-' + stepName).classList.remove('hidden');
-            currentStep = stepName;
         }
 
         function hideAllAlerts() {
@@ -858,242 +819,263 @@
             window.scrollTo({top: 0, behavior: 'smooth'});
         }
 
-        function quickFill() {
-            document.getElementById('citizen-mobile').value = '9431881414';
-        }
-
         function extractCleanToken(val) {
             let clean = val.trim();
-            if (clean.includes('/qr/')) {
-                clean = clean.split('/qr/').pop();
-            } else if (clean.includes('token=')) {
-                clean = clean.split('token=').pop().split('&')[0];
-            }
+            if (clean.includes('/qr/'))      clean = clean.split('/qr/').pop();
+            else if (clean.includes('token=')) clean = clean.split('token=').pop().split('&')[0];
             return clean;
         }
 
-        // Action: Validate QR Card Token
+        // ── Step 1: Validate QR card via real server ───────────────────────────
         function validateCardToken() {
             hideAllAlerts();
             const cleanToken = extractCleanToken(scanToken);
 
-            // Client Mock Lookup
-            const card = mockQrs[cleanToken] || mockQrs['5A9F9999-BB99-99AA-AA99-AA9999999999'];
-            
-            if (!card) {
-                showError('Scanned QR card token not found in database.');
-                showStep('scan');
-                return;
-            }
-
-            if (card.status !== 'ACTIVATED') {
-                showWarning('This QR code (' + card.qrId + ') is UNASSIGNED. PMC staff has not linked it to any Property ID (PID) yet.');
-                showStep('scan');
-                return;
-            }
-
-            const prop = mockProperties[card.propertyId];
-            const last4 = prop && prop.mobileNo ? prop.mobileNo.substring(6) : '1414';
-            
-            document.getElementById('masked-mobile-text').innerText = 'This QR card is linked to a registered mobile ending in: ****' + last4;
-            document.getElementById('masked-mobile-alert').classList.remove('hidden');
-            document.getElementById('div-mobile-input').classList.remove('hidden');
-            document.getElementById('div-otp-input').classList.add('hidden');
-            
-            showStep('login');
+            fetch(API_BASE + 'CardLookupHandler.ashx?value=' + encodeURIComponent(cleanToken))
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        const card = res.data;
+                        if (card.status !== 'ACTIVATED') {
+                            showWarning('This QR code (' + card.qrId + ') is ' + card.status + '. It has not been linked to a Property ID yet.');
+                            showStep('scan');
+                            return;
+                        }
+                        if (card.maskedMobile && card.maskedMobile !== '****') {
+                            document.getElementById('masked-mobile-text').innerHTML =
+                                'This QR card is linked to a registered mobile ending in: <strong>' + card.maskedMobile + '</strong>';
+                        } else {
+                            document.getElementById('masked-mobile-text').innerHTML =
+                                'No registered mobile number on file. Please enter your mobile number to register and verify.';
+                        }
+                        document.getElementById('masked-mobile-alert').classList.remove('hidden');
+                        document.getElementById('div-mobile-input').classList.remove('hidden');
+                        document.getElementById('div-otp-input').classList.add('hidden');
+                        showStep('login');
+                    } else {
+                        showError(res.message || 'QR card check failed.');
+                        showStep('scan');
+                    }
+                })
+                .catch(err => {
+                    showError('Server error during card lookup: ' + err.message);
+                    showStep('scan');
+                });
         }
 
-        // Action: Request OTP SMS
+        // ── Step 2a: Send OTP via real backend ─────────────────────────────────
         document.getElementById('btn-send-otp').onclick = function() {
             hideAllAlerts();
             const mobileInput = document.getElementById('citizen-mobile').value.trim();
-            
+
             if (mobileInput.length !== 10 || isNaN(mobileInput)) {
-                showError('Please enter a valid 10-digit registered mobile number.');
+                showError('Please enter a valid 10-digit mobile number.');
                 return;
             }
 
             const cleanToken = extractCleanToken(scanToken);
-            const card = mockQrs[cleanToken] || mockQrs['5A9F9999-BB99-99AA-AA99-AA9999999999'];
-            const prop = mockProperties[card.propertyId];
-            
-            if (mobileInput !== prop.mobileNo && mobileInput !== '9431881414') {
-                showError('Incorrect mobile number. Enter the registered number: ' + prop.mobileNo);
-                return;
-            }
+            const btn = document.getElementById('btn-send-otp');
+            btn.disabled = true;
+            btn.querySelector('span').innerText = 'SENDING CODE...';
 
-            // Simulate OTP send
-            generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            
-            alert('DEMO SMS SENT! Verification OTP is: ' + generatedOtp);
-            
-            document.getElementById('div-mobile-input').classList.add('hidden');
-            document.getElementById('div-otp-input').classList.remove('hidden');
+            fetch(API_BASE + 'CitizenPortal.ashx?action=send_otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: cleanToken, mobile: mobileInput })
+            })
+            .then(r => r.json())
+            .then(res => {
+                btn.disabled = false;
+                btn.querySelector('span').innerText = 'GET VERIFICATION CODE';
+                if (res.success) {
+                    document.getElementById('div-mobile-input').classList.add('hidden');
+                    document.getElementById('div-otp-input').classList.remove('hidden');
+                    document.getElementById('otp-1').focus();
+                } else {
+                    showError(res.message || 'OTP delivery failed.');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.querySelector('span').innerText = 'GET VERIFICATION CODE';
+                showError('Server communication failure: ' + err.message);
+            });
         };
 
-        // OTP navigation helper
+        // ── OTP box navigation ─────────────────────────────────────────────────
         window.moveNext = function(el, index) {
-            if (el.value.length === 1 && index < 6) {
+            if (el.value.length === 1 && index < 6)
                 document.getElementById('otp-' + (index + 1)).focus();
-            }
         };
 
         window.moveBack = function(el, index) {
-            if (event.key === 'Backspace' && el.value.length === 0 && index > 1) {
+            if (event.key === 'Backspace' && el.value.length === 0 && index > 1)
                 document.getElementById('otp-' + (index - 1)).focus();
-            }
         };
 
         window.verifyOtpAuto = function(el) {
-            if (el.value.length === 1) {
-                setTimeout(() => {
-                    document.getElementById('btn-verify-otp').click();
-                }, 100);
-            }
+            if (el.value.length === 1)
+                setTimeout(() => document.getElementById('btn-verify-otp').click(), 100);
         };
 
-        // Action: Verify OTP and fetch property
+        // ── Step 2b: Verify OTP → hits getDemandForMutation on server ──────────
         document.getElementById('btn-verify-otp').onclick = function() {
             hideAllAlerts();
-            
+
             let otpCode = '';
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 6; i++)
                 otpCode += document.getElementById('otp-' + i).value.trim();
-            }
 
             if (otpCode.length !== 6 || isNaN(otpCode)) {
-                showError('Please enter a 6-digit OTP code.');
+                showError('Please enter the 6-digit OTP code.');
                 return;
             }
 
             const cleanToken = extractCleanToken(scanToken);
+            const btn = document.getElementById('btn-verify-otp');
+            btn.disabled = true;
+            btn.querySelector('span').innerText = 'VERIFYING...';
 
-            if (otpCode !== generatedOtp && otpCode !== '123456') {
-                showError('Invalid code. Enter the OTP shown in the SMS alert or 123456.');
-                return;
-            }
-
-            // Successful verification
-            const card = mockQrs[cleanToken] || mockQrs['5A9F9999-BB99-99AA-AA99-AA9999999999'];
-            const prop = mockProperties[card.propertyId];
-            
-            loadDashboard(prop, card.qrId);
+            // ← This POST triggers HandleVerifyOtp → getDemandForMutation in C#
+            fetch(API_BASE + 'CitizenPortal.ashx?action=verify_otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: cleanToken, otp: otpCode })
+            })
+            .then(r => r.json())
+            .then(res => {
+                btn.disabled = false;
+                btn.querySelector('span').innerText = 'VERIFY & ACCESS RECORDS';
+                if (res.success) {
+                    const prop = res.data;
+                    // Fetch QR ID for PVC card display
+                    fetch(API_BASE + 'CardLookupHandler.ashx?value=' + encodeURIComponent(cleanToken))
+                        .then(r2 => r2.json())
+                        .then(res2 => loadDashboard(prop, res2.success ? res2.data.qrId : cleanToken))
+                        .catch(() => loadDashboard(prop, cleanToken));
+                } else {
+                    showError(res.message || 'Incorrect OTP code.');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.querySelector('span').innerText = 'VERIFY & ACCESS RECORDS';
+                showError('OTP validation error: ' + err.message);
+            });
         };
 
+        // ── Step 3: Dashboard ──────────────────────────────────────────────────
         function loadDashboard(prop, qrId) {
             hideAllAlerts();
-            
-            // Fill values
-            document.getElementById('detail-pid').innerText = prop.pid;
-            document.getElementById('detail-owner').innerText = prop.ownerName;
-            document.getElementById('detail-guardian').innerText = prop.guardianName || 'N/A';
-            document.getElementById('detail-address').innerText = prop.address;
-            document.getElementById('detail-ward').innerText = prop.wardNo || '1';
-            document.getElementById('detail-circle').innerText = prop.circle || 'Patliputra Circle';
 
-            // Dues
-            const dues = parseFloat(prop.totalDues) || 0.0;
-            document.getElementById('property-dues-amount').innerText = '₹' + dues.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-            
-            const statusBadge = document.getElementById('property-payment-status');
-            statusBadge.innerText = prop.paymentStatus.toUpperCase();
-            
+            document.getElementById('detail-pid').innerText      = prop.pid;
+            document.getElementById('detail-owner').innerText    = prop.ownerName;
+            document.getElementById('detail-guardian').innerText = prop.guardianName || 'N/A';
+            document.getElementById('detail-address').innerText  = prop.address;
+            document.getElementById('detail-ward').innerText     = prop.wardNo   || '';
+            document.getElementById('detail-circle').innerText   = prop.circle   || '';
+
+            const dues = parseFloat(prop.totalDues) || 0;
+            currentDuesAmount = dues;
+            document.getElementById('property-dues-amount').innerText =
+                '₹' + dues.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+            const badge = document.getElementById('property-payment-status');
+            badge.innerText = prop.paymentStatus.toUpperCase();
+
             if (prop.paymentStatus.toLowerCase() === 'paid' || dues === 0) {
-                statusBadge.className = 'status-badge status-paid';
-                document.getElementById('dashboard-dues-box').style.background = 'rgba(46, 204, 113, 0.08)';
-                document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(46, 204, 113, 0.25)';
+                badge.className = 'status-badge status-paid';
+                document.getElementById('dashboard-dues-box').style.background  = 'rgba(46,204,113,.08)';
+                document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(46,204,113,.25)';
                 document.getElementById('btn-pay-dues').style.display = 'none';
             } else {
-                statusBadge.className = 'status-badge status-pending';
-                document.getElementById('dashboard-dues-box').style.background = 'rgba(230, 126, 34, 0.08)';
-                document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(230, 126, 34, 0.25)';
+                badge.className = 'status-badge status-pending';
+                document.getElementById('dashboard-dues-box').style.background  = 'rgba(230,126,34,.08)';
+                document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(230,126,34,.25)';
                 document.getElementById('btn-pay-dues').style.display = 'block';
             }
 
-            // Digital card
             document.getElementById('pvc-card-owner').innerText = prop.ownerName;
-            document.getElementById('pvc-card-pid').innerText = 'PID: ' + prop.pid;
-            document.getElementById('pvc-card-qrid').innerText = 'QR ID: ' + qrId;
+            document.getElementById('pvc-card-pid').innerText   = 'PID: ' + prop.pid;
+            document.getElementById('pvc-card-qrid').innerText  = 'QR ID: ' + qrId;
 
             showStep('dashboard');
             document.getElementById('portal-header-desc').innerText = 'Digital Address Card & Municipal Tax Summary';
-
             triggerConfetti();
         }
 
-        // Actions: Pay dues online
+        // ── Pay dues ───────────────────────────────────────────────────────────
         document.getElementById('btn-pay-dues').onclick = function() {
-            const dues = parseFloat(document.getElementById('detail-pid').innerText === '1409113' ? '21906' : '1902');
-            
-            // Check if Razorpay is loaded, otherwise use simulator fallback
-            if (typeof Razorpay !== 'undefined') {
-                var options = {
-                    "key": "rzp_test_dummykey12345", // dummy test key
-                    "amount": dues * 100, // in paise
-                    "currency": "INR",
-                    "name": "Patna Nagar Nigam",
-                    "description": "Municipal Tax Payment for PID: " + document.getElementById('detail-pid').innerText,
-                    "prefill": {
-                        "name": document.getElementById('detail-owner').innerText,
-                        "email": "citizen@patnanagarnigam.in",
-                        "contact": document.getElementById('citizen-mobile').value || "9431881414"
-                    },
-                    "theme": {
-                        "color": "#0D3E73"
-                    },
-                    "handler": function (response) {
-                        alert("Payment Successful! Payment ID: " + response.razorpay_payment_id);
-                        
-                        // Mark as Paid on UI
-                        document.getElementById('property-payment-status').innerText = 'PAID';
-                        document.getElementById('property-payment-status').className = 'status-badge status-paid';
-                        document.getElementById('property-dues-amount').innerText = '₹0.00';
-                        document.getElementById('dashboard-dues-box').style.background = 'rgba(46, 204, 113, 0.08)';
-                        document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(46, 204, 113, 0.25)';
-                        document.getElementById('btn-pay-dues').style.display = 'none';
-                        triggerConfetti();
-                    }
-                };
-                var rzp = new Razorpay(options);
-                rzp.open();
-            } else {
-                // Fallback simulated payment if offline
-                alert("Razorpay payment gateway script not loaded. Simulating payment success...");
-                document.getElementById('property-payment-status').innerText = 'PAID';
-                document.getElementById('property-payment-status').className = 'status-badge status-paid';
-                document.getElementById('property-dues-amount').innerText = '₹0.00';
-                document.getElementById('dashboard-dues-box').style.background = 'rgba(46, 204, 113, 0.08)';
-                document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(46, 204, 113, 0.25)';
-                document.getElementById('btn-pay-dues').style.display = 'none';
-                triggerConfetti();
-            }
-        };
-
-        // Actions: Back check card status button click
-        document.getElementById('btn-check-token').onclick = function() {
-            const val = document.getElementById('manual-token').value.trim();
-            if (!val) {
-                showError('Please enter a QR Token or ID.');
+            if (typeof Razorpay === 'undefined') {
+                showError('Payment gateway not loaded. Please check your internet connection.');
                 return;
             }
+            const dues = currentDuesAmount;
+            var options = {
+                key:         'rzp_live_REPLACE_WITH_REAL_KEY',
+                amount:      Math.round(dues * 100),
+                currency:    'INR',
+                name:        'Patna Nagar Nigam',
+                description: 'Municipal Tax — PID: ' + document.getElementById('detail-pid').innerText,
+                prefill: {
+                    name:    document.getElementById('detail-owner').innerText,
+                    email:   'citizen@patnanagarnigam.in',
+                    contact: document.getElementById('citizen-mobile').value || ''
+                },
+                theme: { color: '#0D3E73' },
+                handler: async function(response) {
+                    try {
+                        const pid       = document.getElementById('detail-pid').innerText;
+                        const ownerName = document.getElementById('detail-owner').innerText;
+                        const mobileNo  = document.getElementById('citizen-mobile').value || '';
+                        const paymentId = response.razorpay_payment_id;
+
+                        const res = await fetch(API_BASE + 'ProcessPaymentHandler.ashx', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pid, amount: dues, paymentId, ownerName, mobileNo })
+                        });
+                        const data = await res.json();
+
+                        if (data.success) {
+                            document.getElementById('property-payment-status').innerText = 'PAID';
+                            document.getElementById('property-payment-status').className = 'status-badge status-paid';
+                            document.getElementById('property-dues-amount').innerText = '₹0.00';
+                            document.getElementById('dashboard-dues-box').style.background  = 'rgba(46,204,113,.08)';
+                            document.getElementById('dashboard-dues-box').style.borderColor = 'rgba(46,204,113,.25)';
+                            document.getElementById('btn-pay-dues').style.display = 'none';
+                            triggerConfetti();
+                        } else {
+                            showError('Payment recorded but database update failed: ' + data.message);
+                        }
+                    } catch(e) {
+                        showError('Error contacting server after payment: ' + e.message);
+                    }
+                }
+            };
+            new Razorpay(options).open();
+        };
+
+        // ── Misc handlers ──────────────────────────────────────────────────────
+        document.getElementById('btn-check-token').onclick = function() {
+            const val = document.getElementById('manual-token').value.trim();
+            if (!val) { showError('Please enter a QR Token or ID.'); return; }
             scanToken = val;
             validateCardToken();
         };
 
-        // Actions: Resend OTP
         document.getElementById('btn-resend-otp').onclick = function() {
-            for (let i = 1; i <= 6; i++) {
-                document.getElementById('otp-' + i).value = '';
-            }
-            document.getElementById('otp-1').focus();
-            document.getElementById('btn-send-otp').click();
+            hideAllAlerts();
+            for (let i = 1; i <= 6; i++) document.getElementById('otp-' + i).value = '';
+            document.getElementById('div-otp-input').classList.add('hidden');
+            document.getElementById('div-mobile-input').classList.remove('hidden');
+            const btn = document.getElementById('btn-send-otp');
+            btn.disabled = false;
+            btn.querySelector('span').innerText = 'GET VERIFICATION CODE';
         };
 
-        // Actions: Logout
         document.getElementById('btn-logout').onclick = function() {
-            for (let i = 1; i <= 6; i++) {
-                document.getElementById('otp-' + i).value = '';
-            }
+            for (let i = 1; i <= 6; i++) document.getElementById('otp-' + i).value = '';
             document.getElementById('citizen-mobile').value = '';
             initFlow();
         };
@@ -1103,77 +1085,49 @@
             card.style.transform = card.style.transform === 'rotateY(180deg)' ? 'rotateY(0deg)' : 'rotateY(180deg)';
         }
 
-        // Particle Canvas Confetti celebration
+        // ── Confetti ───────────────────────────────────────────────────────────
         function triggerConfetti() {
             const canvas = document.getElementById('confetti-canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.width = window.innerWidth;
+            const ctx    = canvas.getContext('2d');
+            canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
-            
-            const particles = [];
-            const colors = ['#E67E22', '#0D3E73', '#2ECC71', '#3498DB', '#9B59B6', '#E74C3C'];
-            
-            for (let i = 0; i < 120; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height - canvas.height,
-                    r: Math.random() * 6 + 4,
-                    d: Math.random() * canvas.height,
-                    color: colors[Math.floor(Math.random() * colors.length)],
-                    tilt: Math.random() * 10 - 5,
-                    tiltAngleIncremental: Math.random() * 0.07 + 0.02,
-                    tiltAngle: 0
-                });
-            }
-            
-            let animationFrameId;
-            let counter = 0;
-            
+
+            const colors = ['#E67E22','#0D3E73','#2ECC71','#3498DB','#9B59B6','#E74C3C'];
+            const particles = Array.from({length: 120}, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 4,
+                d: Math.random() * canvas.height,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                tilt: Math.random() * 10 - 5,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+                tiltAngle: 0
+            }));
+
+            let counter = 0, rafId;
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                
-                particles.forEach((p, idx) => {
+                particles.forEach((p, i) => {
                     p.tiltAngle += p.tiltAngleIncremental;
-                    p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
-                    p.x += Math.sin(p.tiltAngle);
-                    p.tilt = Math.sin(p.tiltAngle - idx/3) * 15;
-                    
+                    p.y   += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+                    p.x   += Math.sin(p.tiltAngle);
+                    p.tilt = Math.sin(p.tiltAngle - i/3) * 15;
                     ctx.beginPath();
-                    ctx.lineWidth = p.r;
+                    ctx.lineWidth   = p.r;
                     ctx.strokeStyle = p.color;
                     ctx.moveTo(p.x + p.tilt + p.r/2, p.y);
                     ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r/2);
                     ctx.stroke();
                 });
-                
-                update();
+                if (counter++ < 180) rafId = requestAnimationFrame(draw);
+                else { ctx.clearRect(0, 0, canvas.width, canvas.height); cancelAnimationFrame(rafId); }
             }
-            
-            function update() {
-                let remaining = 0;
-                particles.forEach(p => {
-                    if (p.y < canvas.height + 20) {
-                        remaining++;
-                    }
-                });
-                
-                if (remaining > 0 && counter < 180) {
-                    counter++;
-                    animationFrameId = requestAnimationFrame(draw);
-                } else {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    cancelAnimationFrame(animationFrameId);
-                }
-            }
-            
             draw();
         }
 
-        window.addEventListener('resize', function() {
-            const canvas = document.getElementById('confetti-canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+        window.addEventListener('resize', () => {
+            const c = document.getElementById('confetti-canvas');
+            c.width = window.innerWidth; c.height = window.innerHeight;
         });
     </script>
 </body>
